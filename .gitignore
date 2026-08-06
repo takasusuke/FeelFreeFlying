@@ -1,0 +1,55 @@
+# Unity（プロジェクトはリポジトリルートに置く前提）
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Unityが自動生成するIDE用ファイル
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vs/
+.idea/
+.vscode/
+
+# ビルド成果物
+*.apk
+*.aab
+*.unitypackage
+*.app
+ExportedObj/
+crashlytics-build.properties
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# PLATEAUの生データ（再取得可能・サイズが大きい → CLAUDE.md「データ管理」）
+/[Dd]ata/[Pp]lateau/
+*.gml
+*.citygml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 秘密情報（→ ../CLAUDE.md §6）
+.env
+.env.*
+*.p8
+*.keystore
+*.jks
