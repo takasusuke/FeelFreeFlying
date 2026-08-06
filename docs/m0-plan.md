@@ -54,9 +54,21 @@ PCで60fpsに届かない場合は、原因の切り分け（メッシュ粒度�
 | Git URL | `Package Manager` > `+` > `Add package from git URL` に `https://github.com/Project-PLATEAU/PLATEAU-SDK-for-Unity.git#<タグ名>` | **Git LFSのインストールが必須** |
 
 うまく入らない場合、ウイルス対策ソフトがDLL/実行ファイルをブロックしていることがある
-（公式のトラブルシューティングに記載あり）。
+（公式のトラブルシューティングに記載あり）。**Windowsで詰まったらまずWindows Defenderを疑う。**
 
-### 2.3 レンダーパイプライン
+### 2.3 Windowsでの注意点
+
+主開発機はWindows（→ [`../CLAUDE.md`](../CLAUDE.md) 「開発マシン」）。着手前に以下を済ませる。
+
+- **長いパスを有効にする。** PLATEAUのインポート生成物はパスが深くなりやすく、260文字制限に
+  当たるとインポートやビルドが不可解に失敗する
+  - `git config --global core.longpaths true`
+  - Windows側の長いパス有効化（グループポリシー、またはレジストリ
+    `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem` の `LongPathsEnabled` を1）
+- Git URL方式でSDKを入れるなら **Git LFS** を先に入れる
+- リポジトリを深い階層に置かない
+
+### 2.4 レンダーパイプライン
 
 公式マニュアルにレンダーパイプラインの明記が無いため、**M0の最初にここを確定させる。**
 
