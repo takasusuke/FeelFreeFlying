@@ -8,6 +8,7 @@
 
 日本の街の上空を自由に飛び回って眺める体験ゲーム（Unity / PC・Steam想定）。
 要件定義は[`docs/requirements.md`](docs/requirements.md)が正。仕様の判断に迷ったらまずこれを読む。
+M0（技術検証）の手順と測定結果は[`docs/m0-plan.md`](docs/m0-plan.md)。
 
 **操縦シミュレータではない。** 判断に迷ったら「知らない街を空から見て回るのが気持ちいいか」で決める。
 
