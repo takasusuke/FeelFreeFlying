@@ -83,18 +83,44 @@ LFSを含めた取得に1時間以上かかる見込みだった。tgzは同じ�
 - Git URL方式でSDKを入れるなら **Git LFS** を先に入れる
 - リポジトリを深い階層に置かない
 
-### 2.4 レンダーパイプライン
+### 2.4 レンダーパイプライン ✅ URPを導入（2026-08-08）
 
-公式マニュアルにレンダーパイプラインの明記が無いため、**M0の最初にここを確定させる。**
+公式マニュアルにレンダーパイプラインの明記が無いため、**M0の最初にここを確定させた。**
 
-推奨は **URP**。理由は2つ。
+**URP 17.3.0**（エディタに同梱される版。`com.unity.render-pipelines.core` 17.3.0 と揃えた）。
+理由は2つ。
 
 - 様式化した見た目（色面・シルエット・光 → `requirements.md` §5）はURPの方が作りやすい
 - モバイルを検討対象に残す以上、Built-inで進めると移植時に全マテリアルを作り直すことになる
 
-ただし**SDKのマテリアル生成がURPで問題なく動くかを最初に確認する**。
-インポートした建物がピンク（シェーダ未解決）になる場合はマテリアル変換が必要。
-ここで詰まるようなら、M0はBuilt-inで測って「URP対応はM2の課題」として切り出す。
+SDK側もURPを前提に作られていることをソースで確認済み（`RenderUtil` / `MaterialPathUtil` が
+`UniversalRenderPipelineAsset` を判定して `Universal Render Pipeline/Lit` 系のマテリアルを選ぶ）。
+ただし**インポートした建物がピンク（シェーダ未解決）にならないかは、実際に都市を入れた時点で確認する**。
+そこで詰まるようなら、M0はBuilt-inで測って「URP対応はM2の課題」として切り出す。
+
+設定は手作業ではなく `Assets/Scripts/Editor/M0ProjectSetup.cs` が行う。Editor上でポチポチ作ると、
+Macで開き直した時や作り直した時に**同じ設定を再現できず、数値の比較対象が揃わなくなる**ため。
+
+```
+Unity.exe -projectPath . -batchmode -quit -logFile <ログ> `
+  -executeMethod FeelFreeFlying.EditorTools.M0ProjectSetup.SetupAll
+```
+
+メニューからも実行できる（`Tools > FeelFreeFlying > M0: URPを設定する` / `M0: 計測シーンを作る`）。
+生成済みなら作り直さないので、設定を手で詰めた後に実行しても壊れない。
+
+生成物:
+
+| 資産 | 役割 |
+|---|---|
+| `Assets/Settings/Rendering/UrpAsset.asset` | パイプライン本体。**全6品質レベルに割り当て済み**（1つでも未設定だとそのレベルだけBuilt-inで描かれ、計測値が割れる） |
+| `Assets/Settings/Rendering/UrpAsset_Renderer.asset` | Universal Renderer |
+| `Assets/Settings/UniversalRenderPipelineGlobalSettings.asset` | URPが自動生成。`Assets`直下に出るので移動した |
+| `Assets/Settings/DefaultVolumeProfile.asset` | 同上 |
+
+**URPの各種設定（影の距離・HDR・MSAA等）は既定値のまま。** 上空からの俯瞰では既定の影距離
+（50m）はほぼ効かないので、詰めるのは実際に都市を入れて絵を見てからにする。
+**設定を変えたらこの節に書き、変えた前後で測り直す。**
 
 ---
 
@@ -153,13 +179,26 @@ SDK同梱の`AttributesColorSample` / `AttributesDisplaySample`が読み方の�
 | `Assets/Scripts/Benchmark/FlightBenchmarkPath.cs` | カメラ軌道。ウェイポイントをCatmull-Romで繋ぎ、**距離で位置を引く**（フレームレートが変わっても経路が変わらない） |
 | `Assets/Scripts/Benchmark/FlightBenchmarkRunner.cs` | 軌道上を一定速度で走らせ、フレーム時間を記録して結果をファイルに出す |
 
-セットアップ:
+セットアップ: **シーンは生成済み。** `Assets/Scenes/M0Benchmark.unity` を開けば、
+`BenchmarkPath`（半径800m・高度300m・12点の円軌道 / 全長 約5,022m）と、
+`FlightBenchmarkRunner`付きのMain Camera（near 1m / **far 20,000m**）が入っている。
+作り直す時は `Tools > FeelFreeFlying > M0: 計測シーンを作る`（既存があれば何もしない）。
 
-1. 空のGameObjectを都市の中心あたりに置き、`FlightBenchmarkPath`を付ける
-2. インスペクタ右上のコンテキストメニュー **「円軌道を生成する」** で軌道を作る
-   （半径・高度・点数は事前に設定。手でウェイポイントを置いてもよい。Sceneビューに水色の線で出る）
-3. Main Cameraに`FlightBenchmarkRunner`を付け、`Path`を割り当てる
-4. `Label`に測定条件（例: `地域単位_URP`）を入れて再生
+都市をインポートしたら、`BenchmarkPath`を街の中心に置き、半径・高度を街の広がりに合わせる
+（インスペクタで値を変えてから、コンテキストメニュー **「円軌道を生成する」**）。
+条件ごとに`Label`（例: `地域単位_URP`）を変えて再生する。
+
+**ビルドした実行ファイルでは、条件ごとにビルドし直さなくてよい。** コマンドラインで上書きできる。
+
+```
+FeelFreeFlying-M0.exe -ffbenchmark-label 地域単位_URP -ffbenchmark-quit -ffbenchmark-nohud
+```
+
+| 引数 | 効果 |
+|---|---|
+| `-ffbenchmark-label <名前>` | 出力ファイル名と集計に入る測定条件名 |
+| `-ffbenchmark-quit` | 1周終わったら自動終了。連続実行する時に使う |
+| `-ffbenchmark-nohud` | HUD（IMGUI）を切る。最終的な数値を取る時 |
 
 仕様上そうしてある点:
 
@@ -170,7 +209,21 @@ SDK同梱の`AttributesColorSample` / `AttributesDisplaySample`が読み方の�
 - 入力を一切扱わない（旧Input Managerに触るとInput Systemパッケージ構成で実行時例外になるため）
 - 最終的な数値を取る時は`Show Hud`を切る（IMGUIが僅かに乗る）
 
+> **落とし穴: `Run In Background` が既定でオフ。** オフのままビルドすると、プレイヤーの
+> ウィンドウが非フォーカスの間フレームが進まず、**計測が始まりも終わりもしない**（実際にここで
+> 一度詰まった）。`M0PlayerBuild`がビルド時に有効化している。
+
 **Editor上の数値を最終判断に使わない。必ずビルドして実行ファイルで測る。**
+
+ビルドも手作業にしない。`Tools > FeelFreeFlying > M0: 計測用にビルドする (Windows64)`、または
+
+```
+Unity.exe -projectPath . -batchmode -quit -logFile <ログ> `
+  -executeMethod FeelFreeFlying.EditorTools.M0PlayerBuild.BuildWindows64
+```
+
+出力は `Build/M0/FeelFreeFlying-M0.exe`（gitignore済み）。開発用ビルドにはしない
+（Profiler接続ぶんが乗るため。計測は出荷と同じ条件で行う）。ログに合計サイズが出る。
 
 ### 4.2 取る数値
 
@@ -198,13 +251,30 @@ Runnerの出力先は `Application.persistentDataPath/m0-benchmark/`（Windows�
 
 | 項目 | 値 |
 |---|---|
-| 実行日 | |
-| Unityバージョン | |
-| PLATEAU SDKバージョン | |
-| レンダーパイプライン | |
-| PC（GPU / CPU / メモリ） | |
+| 実行日 | （都市データ投入後に記入） |
+| Unityバージョン | 6000.3.21f1 |
+| PLATEAU SDKバージョン | 4.3.0 |
+| レンダーパイプライン | URP 17.3.0（既定設定） |
+| PC（GPU / CPU / メモリ） | NVIDIA GeForce RTX 3060 (12GB) / Intel Core i7-12700 / 32GB。Direct3D12 |
 | モバイル実機（あれば） | |
 | 対象範囲（メッシュコード） | |
+
+### 基準値（都市データ無し / 2026-08-08）
+
+**都市を入れる前の空シーンの数値。** これを引いた差分が都市データのコストになる。
+
+| 項目 | 値 |
+|---|---|
+| avg fps | 2,356（1% low 285 / 軌道1周 83.7秒 / 197,203フレーム） |
+| ビルド後サイズ | **419.9 MB** |
+
+**空シーンで420MBある。うち約300MBはPLATEAU SDKのフォールバック用テクスチャ**
+（`Materials/Fallback/MaterialTexture/` 配下の2048px法線マップ等が、シーンで使っていなくても
+`Packages`配下のResourcesとしてビルドに丸ごと入る。ビルドログの内訳でTexturesが297.9MB＝97.3%）。
+
+**これは「何都市同梱できるか」に直接効く。** 都市データが1地区あたり数百MBだとしても、
+土台で420MB持っていかれている。使わないフォールバックテクスチャを外す作業をM2の項目として
+持つ（M0では手を入れず、素の数値のまま比較する）。
 
 ### 結果
 
