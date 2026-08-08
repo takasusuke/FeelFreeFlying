@@ -8,5 +8,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/M0Benchmark.unity
     guid: 7877e3e3ef4349d43a83f3447fb74b98
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.addressableassets: {fileID: 11400000, guid: c937316f6bcb1114b9196975a9655036, type: 2}
   m_UseUCBPForAssetBundles: 0
