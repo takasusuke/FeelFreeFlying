@@ -37,6 +37,9 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
+# PLATEAU SDKのtgz（525MB。公式リリースから再取得可能 → docs/m0-plan.md §2.2）
+/LocalPackages/*.tgz
+
 # PLATEAUの生データ（再取得可能・サイズが大きい → CLAUDE.md「データ管理」）
 /[Dd]ata/[Pp]lateau/
 *.gml

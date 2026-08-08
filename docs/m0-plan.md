@@ -30,28 +30,43 @@ PCで60fpsに届かない場合は、原因の切り分け（メッシュ粒度�
 
 ## 2. 環境の準備
 
-### 2.1 Unity
+### 2.1 Unity ✅ 完了（2026-08-08）
 
-1. [Unity Hub](https://unity.com/ja/download) をインストール
-2. **PLATEAU SDKのリリースページに記載された動作確認済みバージョンを入れる**
-   → https://github.com/Project-PLATEAU/PLATEAU-SDK-for-Unity/releases
-   （本書作成時点の最新版 v4.3.0 は動作確認環境 `Unity 6000.3.10f1` / 推奨 `6000.3.10f1` 以上。
-   **着手時に必ずリリースページ側を正とすること。** SDKのバージョンで要求Unityが変わる）
-3. テンプレートは「3D」で新規プロジェクトを作成
+**Unity 6000.3.21f1**（6000.3系LTSの最新パッチ）。
 
-> **本リポジトリには既に`Assets/Scripts/`が入っている。** Unity Hubは空でないフォルダへの
-> プロジェクト作成を拒むことがある。その場合は別の場所にプロジェクトを作り、生成された
-> `Assets/` `Packages/` `ProjectSettings/` をリポジトリ直下へ移す（`Assets/Scripts/`は
-> 上書きせずマージする）。`.gitignore`はUnityプロジェクトがリポジトリルートにある前提で書いてある。
+バージョンを6000.3系にした理由: SDK v4.3.0の`package.json`が`"unity": "6000.3"`であり、
+リリースノートにも「**UnityのLTSバージョンの変更に合わせて、対応バージョンをUnity6000.3以上とした**」
+とある。6000.5系（Tech Stream）でも文言上の条件は満たすが、**M0の目的は計測であって、
+SDKと未検証エディタの不整合をデバッグすることではない。**
 
-### 2.2 PLATEAU SDK for Unity
+プロジェクトはリポジトリ直下に生成済み。**Unity Hubは空でないフォルダへのプロジェクト作成を
+拒むため、CLIで作った。**
 
-導入方法は2通り。どちらでもよい。
+```
+& "C:\Program Files\Unity\Hub\Editor\6000.3.21f1\Editor\Unity.exe" `
+  -createProject "<リポジトリのパス>" -batchmode -quit -logFile <ログ>
+```
 
-| 方法 | 手順 | 備考 |
-|---|---|---|
-| tgz | リリースページから`.tgz`をダウンロード（解凍しない）→ `Window` > `Package Manager` > `+` > `Add package from tarball` | 素直。バージョンが固定される |
-| Git URL | `Package Manager` > `+` > `Add package from git URL` に `https://github.com/Project-PLATEAU/PLATEAU-SDK-for-Unity.git#<タグ名>` | **Git LFSのインストールが必須** |
+> **Windowsの`Unity.exe`は起動時に自分自身を再起動する。** 呼び出し元のシェルは即座に戻るので、
+> 終了コードを完了判定に使ってはいけない。`Get-Process Unity`が0件になるまで待つこと。
+> バッチ処理をスクリプト化する時にここで必ず引っかかる。
+
+### 2.2 PLATEAU SDK for Unity ✅ 完了（v4.3.0）
+
+**ローカルtarball方式**で導入済み。`Packages/manifest.json`に相対パスで書いてある。
+
+```
+"com.synesthesias.plateau-unity-sdk": "file:../LocalPackages/PLATEAU-SDK-for-Unity-v4.3.0.0.tgz"
+```
+
+tgz本体は799MBあるためgit管理外。取得手順と検証方法は
+[`../LocalPackages/README.md`](../LocalPackages/README.md)。
+
+**Git URL方式は採らなかった。** 公式に用意されている方法だが、実測で**10〜17MB/分**しか出ず、
+LFSを含めた取得に1時間以上かかる見込みだった。tgzは同じ公式リリース成果物。
+
+> **落とし穴: 転送が途中で切れてもファイルは生成される。** 部分ファイルをUnityに渡すと
+> `zlib: unexpected end of file` で失敗する。サイズと`gzip -t`で必ず検証すること。
 
 うまく入らない場合、ウイルス対策ソフトがDLL/実行ファイルをブロックしていることがある
 （公式のトラブルシューティングに記載あり）。**Windowsで詰まったらまずWindows Defenderを疑う。**
@@ -62,9 +77,9 @@ PCで60fpsに届かない場合は、原因の切り分け（メッシュ粒度�
 
 - **長いパスを有効にする。** PLATEAUのインポート生成物はパスが深くなりやすく、260文字制限に
   当たるとインポートやビルドが不可解に失敗する
-  - `git config --global core.longpaths true`
-  - Windows側の長いパス有効化（グループポリシー、またはレジストリ
-    `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem` の `LongPathsEnabled` を1）
+  - `git config --global core.longpaths true` … ✅ 設定済み
+  - レジストリ `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem` の `LongPathsEnabled` を1
+    … ✅ 設定済み（**要再起動。インポート前に再起動すること**）
 - Git URL方式でSDKを入れるなら **Git LFS** を先に入れる
 - リポジトリを深い階層に置かない
 
