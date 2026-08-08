@@ -61,5 +61,7 @@ desktop.ini
 # 中身は再現できる: Tools > FeelFreeFlying > M0: 計測シーンを作る → PLATEAUをインポート（docs/m0-plan.md §3）
 /Assets/Scenes/M0Benchmark*.unity
 /Assets/Scenes/M0Benchmark*.unity.meta
+/Assets/Scenes/M1Flight*.unity
+/Assets/Scenes/M1Flight*.unity.meta
 # 検証ツールの出力（M0SceneStats等）。数値の正は docs/m0-plan.md §5 に転記する
 /docs/m0/
