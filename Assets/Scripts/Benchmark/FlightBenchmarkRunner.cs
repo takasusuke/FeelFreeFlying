@@ -45,6 +45,10 @@ namespace FeelFreeFlying.Benchmark
         [Tooltip("俯角。正の値でカメラが下を向く")]
         [SerializeField, Range(0f, 89f)] private float pitchDegrees = 20f;
 
+        [Tooltip("軌道の中心（＝街の中心）を向く。切ると進行方向を向く。" +
+                 "円軌道で進行方向を向くと街が常に画面の横に来て、描画対象がほとんど入らない")]
+        [SerializeField] private bool lookAtPathCenter = true;
+
         [Header("計測")]
         [Tooltip("記録を始めるまでの助走。シェーダのコンパイルや初回ロードのスパイクを除くため")]
         [SerializeField, Min(0f)] private float warmupSeconds = 5f;
@@ -184,9 +188,24 @@ namespace FeelFreeFlying.Benchmark
         {
             target.position = path.GetPositionAtDistance(d);
 
-            Vector3 direction = path.GetDirectionAtDistance(d);
+            Vector3 direction = GetFacing();
             Quaternion look = Quaternion.LookRotation(direction, Vector3.up);
             target.rotation = look * Quaternion.Euler(pitchDegrees, 0f, 0f);
+        }
+
+        /// <summary>
+        /// カメラの向き。中心注視の場合は水平成分だけを使い、上下は俯角で作る
+        /// （中心へ直接向けると高度によって俯角が変わり、条件が揃わないため）。
+        /// </summary>
+        private Vector3 GetFacing()
+        {
+            if (!lookAtPathCenter) return path.GetDirectionAtDistance(distance);
+
+            Vector3 toCenter = path.transform.position - target.position;
+            toCenter.y = 0f;
+            return toCenter.sqrMagnitude > Mathf.Epsilon
+                ? toCenter.normalized
+                : path.GetDirectionAtDistance(distance);
         }
 
         private void Finish()
@@ -226,6 +245,7 @@ namespace FeelFreeFlying.Benchmark
                 summary.AppendLine($"editor           : {Application.isEditor}");
                 summary.AppendLine($"path length      : {path.TotalLength:F1} m");
                 summary.AppendLine($"speed            : {speed:F1} m/s");
+                summary.AppendLine($"facing           : {(lookAtPathCenter ? "軌道の中心" : "進行方向")} / 俯角 {pitchDegrees:F0} 度");
                 summary.AppendLine();
                 summary.AppendLine(result.ToSummary());
 
