@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.synesthesias.plateau-unity-sdk": "file:../LocalPackages/PLATEAU-SDK-for-Unity-v4.3.0.0.tgz",
+    "com.unity.inputsystem": "1.14.2",
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.render-pipelines.universal": "17.3.0",
     "com.unity.modules.accessibility": "1.0.0",
