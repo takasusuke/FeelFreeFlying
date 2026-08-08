@@ -53,10 +53,14 @@ namespace FeelFreeFlying.Flight
         [SerializeField] private bool invertStickPitch = false;
 
         [Header("カーソル")]
-        [Tooltip("マウスで操作するので既定で隠す。Escで解除できる（Editorでは自動で戻る）")]
+        [Tooltip("マウスで操作するので既定で隠す。**Escで必ず解放できるようにしておくこと**")]
         [SerializeField] private bool lockCursor = true;
 
         private Vector2 virtualStick;
+        private bool cursorCaptured;
+
+        /// <summary>カーソルを掴んでいるか。falseの間はマウスで操縦しない。</summary>
+        public bool CursorCaptured => cursorCaptured;
 
         /// <summary>マウス由来の仮想スティック位置（-1〜1）。HUDの表示に使う。</summary>
         public Vector2 VirtualStick => virtualStick;
@@ -66,22 +70,50 @@ namespace FeelFreeFlying.Flight
 
         private void OnEnable()
         {
-            if (!lockCursor) return;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            SetCursorCaptured(lockCursor);
         }
 
         private void OnDisable()
         {
+            SetCursorCaptured(false);
+        }
+
+        /// <summary>
+        /// Escでカーソルを返し、画面をクリックで掴み直す。
+        ///
+        /// **解放手段の無いカーソルロックを作らない。** ウィンドウ表示のビルドで閉じ込めると、
+        /// 他のアプリを操作できなくなり、ゲームを終了させることすらできない。
+        /// </summary>
+        private void UpdateCursorCapture()
+        {
             if (!lockCursor) return;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+
+            Keyboard keyboard = Keyboard.current;
+            if (cursorCaptured && keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            {
+                SetCursorCaptured(false);
+                return;
+            }
+
+            Mouse mouse = Mouse.current;
+            if (!cursorCaptured && mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                SetCursorCaptured(true);
+            }
+        }
+
+        private void SetCursorCaptured(bool captured)
+        {
+            cursorCaptured = captured;
+            Cursor.lockState = captured ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !captured;
         }
 
         public FlightInputState Read()
         {
             var state = new FlightInputState();
 
+            UpdateCursorCapture();
             ReadGamepad(ref state);
             ReadKeyboardAndMouse(ref state);
 
@@ -113,7 +145,8 @@ namespace FeelFreeFlying.Flight
 
         private void ReadKeyboardAndMouse(ref FlightInputState state)
         {
-            Mouse mouse = Mouse.current;
+            // カーソルを返している間はマウスで操縦しない（他のアプリを触っている最中に機体が動かないように）
+            Mouse mouse = lockCursor && !cursorCaptured ? null : Mouse.current;
             if (mouse != null)
             {
                 Vector2 delta = mouse.delta.ReadValue();
