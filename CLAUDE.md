@@ -70,3 +70,20 @@ M0での具体的な待ち方は[`docs/m0-plan.md`](docs/m0-plan.md) §2.1。
 
 **M0（技術検証）とM1（飛行の操作）を飛ばして先の工程に進まない。** M0が済むまで工数は読めず、
 M1が面白くないなら企画自体を中止する。この2つは順序を入れ替えてもよいが、省略はしない。
+
+## iOS/TestFlight配信（土台のみ、未実働）
+
+出荷はSteam（PC）が第一候補だが、iOS/TestFlightにもいずれ出す計画があるため、2026-08-08に
+先行してApple Developer側の土台だけ用意した。詳細・共通の運用ルールは
+[`~/AIFiles/docs/testflight-release.md`](../docs/testflight-release.md)を参照。
+
+- Bundle ID `dev.appfactory.feelFreeFlying` 登録済み（Apple Developer Identifiers）
+- GitHub Secrets設定済み（`ASC_KEY_ID`/`ASC_ISSUER_ID`/`ASC_PRIVATE_KEY`/`TESTFLIGHT_TESTER_EMAIL`/
+  `IOS_DIST_CERT_P12`/`IOS_DIST_CERT_PASSWORD`。証明書はAppFactory/NumberBullet2/StoneKnightsと
+  同じApple Developerチーム(FEPN2STZZX)の使い回し）
+- `.github/workflows/testflight.yml`は`workflow_dispatch`のみで、実行すると意図的に失敗する
+  （Unity側の準備が無いため）。**実際に動かす前に必要な作業はworkflowファイル冒頭のコメントを参照**
+  （Player SettingsのBundle Identifier設定、Build Settingsへのシーン追加、Xcodeプロジェクト書き出し
+  用Editorスクリプトの実装、`Builds/ExportOptions.plist`作成、App Store ConnectでのApp手動登録）
+- App Store ConnectのApp登録はAPIから作成不可（Appsリソースはどのロールのキーでも403）と確認済み。
+  Web UIでの手動登録が必須

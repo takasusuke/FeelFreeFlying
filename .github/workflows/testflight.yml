@@ -1,0 +1,62 @@
+name: TestFlight
+
+# まだ「土台」のみ(2026-08-08時点)。iOS/TestFlight配信自体はこのゲームの
+# 計画上いずれ行う予定だが、現時点ではUnity側の準備が整っていない
+# (Player SettingsのBundle Identifier未設定、Build Settingsにシーンが
+# 1つも無い、iOS向けのXcodeプロジェクトを書き出すEditorスクリプトが
+# 存在しない)。誤って実行しても必ず失敗するので、on: push は付けず
+# workflow_dispatch のみにしてある。
+#
+# 署名はAppFactory/NumberBullet2と同じ方式: Apple Developerチーム
+# (FEPN2STZZX)で既に発行済みのApple Distribution証明書を、GitHub Secrets
+# 経由の.p12で使い回す。GitHub-hostedランナーはkeychainが空のため、
+# 証明書を持ち込まないと-allowProvisioningUpdatesがrunのたびに証明書を
+# 新規発行し、Appleの上限に達する
+# (詳細: ~/AIFiles/docs/testflight-release.md「GitHub-hosted runnerでの
+# 署名証明書使い回し」)。
+#
+# Bundle ID dev.appfactory.feelFreeFlying は登録済み(Apple Developer
+# Identifiers)。App Store ConnectのApp登録はAPIから作成できない
+# (Apps リソースはどのロールのキーでもCREATE不可と確認済み)ため、
+# Web UIでの手動登録がまだ必要。
+#
+# 残作業(このworkflowを実際に動かす前に必要):
+# - Unity Player SettingsでBundle Identifierを設定
+# - iOS向けのシーンをBuild Settingsに追加
+# - StoneKnights/Assets/Scripts/Editor/IosBuilder.cs 相当の、
+#   Xcodeプロジェクトを書き出すEditorスクリプトを実装
+# - Builds/ExportOptions.plistを作成(bundle id / team id FEPN2STZZX)
+# - App Store ConnectでTestFlight配信先のAppをWeb UIで手動登録
+# - 上記が揃ったら、下のbuildジョブに archive/export/upload のstepを
+#   足し、on: push を復活させる(StoneKnights/AppFactoryのworkflowを参考に)
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import the reusable Apple Distribution certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.IOS_DIST_CERT_P12 }}
+          p12-password: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+
+      - name: Write the App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # Both xcodebuild's -authenticationKeyPath and altool look here.
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Unity側のiOSビルドは未実装
+        run: |
+          echo "::error::Unity側のiOSビルド手順(Xcodeプロジェクト書き出し〜archive〜export〜アップロード)がまだ実装されていません。このファイル冒頭のコメントと StoneKnights/.github/workflows/testflight.yml を参考に実装してください。"
+          exit 1
