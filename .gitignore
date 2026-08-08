@@ -59,7 +59,7 @@ desktop.ini
 
 # 計測シーン（都市データがシーンに直接埋め込まれ228MB超になる → CLAUDE.md「データ管理」）
 # 中身は再現できる: Tools > FeelFreeFlying > M0: 計測シーンを作る → PLATEAUをインポート（docs/m0-plan.md §3）
-/Assets/Scenes/M0Benchmark.unity
-/Assets/Scenes/M0Benchmark.unity.meta
+/Assets/Scenes/M0Benchmark*.unity
+/Assets/Scenes/M0Benchmark*.unity.meta
 # 検証ツールの出力（M0SceneStats等）。数値の正は docs/m0-plan.md §5 に転記する
 /docs/m0/
