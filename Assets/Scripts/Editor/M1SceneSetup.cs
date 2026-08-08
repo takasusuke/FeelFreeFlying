@@ -27,6 +27,13 @@ namespace FeelFreeFlying.EditorTools
         private const string FlightScene = "Assets/Scenes/M1Flight.unity";
         private const string SuitMaterialPath = "Assets/Settings/Rendering/PlaceholderFlyerSuit.mat";
         private const string CapeMaterialPath = "Assets/Settings/Rendering/PlaceholderFlyerCape.mat";
+        private const string WaterMaterialPath = "Assets/Settings/Rendering/PlaceholderWater.mat";
+
+        /// <summary>海面の広さ（1辺・メートル）。カメラの遠クリップより広くないと端が見える。</summary>
+        private const float OceanRadiusMeters = 40000f;
+
+        /// <summary>海面を街の最下点からどれだけ下げるか (m)。</summary>
+        private const float SeaLevelBelowCity = 2f;
 
         /// <summary>街を見下ろせて、かつ建物が迫って見える高さ。</summary>
         private const float StartAltitude = 180f;
@@ -51,7 +58,10 @@ namespace FeelFreeFlying.EditorTools
             Bounds cityBounds = CalculateCityBounds();
             RemoveBenchmarkRig();
 
-            Material suit = LoadOrCreateMaterial(SuitMaterialPath, new Color(0.18f, 0.24f, 0.38f));
+            CreateOcean(cityBounds);
+
+            // 街（灰色）に対して沈まない明るさにする。暗い色だと自分の姿を見失う
+            Material suit = LoadOrCreateMaterial(SuitMaterialPath, new Color(0.22f, 0.42f, 0.75f));
             Material cape = LoadOrCreateMaterial(CapeMaterialPath, new Color(0.62f, 0.14f, 0.16f));
             GameObject craft = CreateCraft(cityBounds, suit, cape);
             SetUpCamera(craft.GetComponent<FlightController>());
@@ -98,6 +108,39 @@ namespace FeelFreeFlying.EditorTools
         }
 
         /// <summary>
+        /// 取り込んだ範囲の外側を海で埋める。
+        ///
+        /// **街の外へ出られてしまうため。** 取り込んだのは2km四方だけで、その外は
+        /// 何も無い空間になる。地面が消えると「世界の果て」が見えてしまい、
+        /// 飛んでいる場所が箱庭だと分かってしまう。海なら**端が自然に見え、
+        /// 引き返す理由にもなる**（都市を足す時は、その都市の周りだけ地面が生える）。
+        ///
+        /// 海面は街の最下点のわずかに下に置く。地形の縁が海に落ちる崖になり、
+        /// 島のように見える。**水の表現は作り込まない**（M5の課題）。
+        /// </summary>
+        private static void CreateOcean(Bounds cityBounds)
+        {
+            Material water = LoadOrCreateMaterial(WaterMaterialPath, new Color(0.05f, 0.16f, 0.26f));
+
+            GameObject ocean = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ocean.name = "Ocean";
+            ocean.transform.position = new Vector3(
+                cityBounds.center.x, cityBounds.min.y - SeaLevelBelowCity, cityBounds.center.z);
+
+            // Planeは1辺10mなので、10km四方にするには1000倍。カメラの遠クリップ(20km)より広い
+            ocean.transform.localScale = Vector3.one * OceanRadiusMeters / 10f;
+
+            if (water != null)
+            {
+                var renderer = ocean.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = water;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+
+            Object.DestroyImmediate(ocean.GetComponent<Collider>());
+        }
+
+        /// <summary>
         /// 飛ぶのは航空機ではなく**人**（腕を前に伸ばしてマントをなびかせる姿勢）。
         /// 見た目は仮だが、**一人称にした時に自分の腕が視界に入る**位置関係だけは合わせてある。
         /// これが無いと一人称が「浮いているカメラ」になり、身体で飛んでいる感じが出ない。
@@ -133,9 +176,11 @@ namespace FeelFreeFlying.EditorTools
             AddPart(flyer.transform, "LegRight", PrimitiveType.Capsule,
                 new Vector3(0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
 
-            // マント。速度感は自分の身体の一部が後ろへ流れているほうが分かりやすい
+            // マント。速度感は自分の身体の一部が後ろへ流れているほうが分かりやすい。
+            // **幅と角度は控えめにする。** 大きく水平に広げると、後方から見下ろすカメラに対して
+            // 面が正対し、身体を完全に隠す（実際に一度そうなった）
             AddPart(flyer.transform, "Cape", PrimitiveType.Cube,
-                new Vector3(0f, 0.1f, -0.62f), new Vector3(-8f, 0f, 0f), new Vector3(0.62f, 0.02f, 1.2f), cape);
+                new Vector3(0f, -0.1f, -0.6f), new Vector3(-10f, 0f, 0f), new Vector3(0.3f, 0.02f, 0.8f), cape);
 
             return flyer;
         }

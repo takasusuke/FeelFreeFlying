@@ -30,11 +30,12 @@ namespace FeelFreeFlying.Flight
         [SerializeField] private ViewMode mode = ViewMode.ThirdPerson;
 
         [Header("三人称")]
-        [Tooltip("機体から見た定位置。zが後ろ、yが上")]
-        [SerializeField] private Vector3 thirdPersonOffset = new Vector3(0f, 1.7f, -6f);
+        [Tooltip("機体から見た定位置。zが後ろ、yが上。" +
+                 "**上げすぎるとマントを見下ろす形になり、身体が隠れる**")]
+        [SerializeField] private Vector3 thirdPersonOffset = new Vector3(0f, 0.5f, -4.8f);
 
         [Tooltip("最高速で追加で後ろに引く距離 (m)")]
-        [SerializeField, Range(0f, 20f)] private float speedPullBack = 3.5f;
+        [SerializeField, Range(0f, 20f)] private float speedPullBack = 2.5f;
 
         [Tooltip("追従の鈍さ (秒)。大きいほど機体が先に動いて速く見える")]
         [SerializeField, Range(0.01f, 1f)] private float followSmoothing = 0.12f;
