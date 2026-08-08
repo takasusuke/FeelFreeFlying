@@ -48,8 +48,19 @@ SDKと未検証エディタの不整合をデバッグすることではない�
 ```
 
 > **Windowsの`Unity.exe`は起動時に自分自身を再起動する。** 呼び出し元のシェルは即座に戻るので、
-> 終了コードを完了判定に使ってはいけない。`Get-Process Unity`が0件になるまで待つこと。
+> 終了コードを完了判定に使ってはいけない。プロセスが消えるまで待つ必要がある。
 > バッチ処理をスクリプト化する時にここで必ず引っかかる。
+>
+> **待つときは必ずプロジェクトパスで絞る。** `Get-Process Unity`は他のリポジトリ
+> (`StoneKnights` / `FightingPieces`)のUnityまで数えるため、隣で数時間の測定が走っていると
+> 永遠に終わらず、そこで「片付ける」と判断すると他人の計算を消す。
+>
+> ```powershell
+> Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" |
+>   Where-Object { $_.CommandLine -match 'FeelFreeFlying' }
+> ```
+>
+> 詳細は[`~/AIFiles/docs/unity-batch-runs.md`](../../docs/unity-batch-runs.md)。
 
 ### 2.2 PLATEAU SDK for Unity ✅ 完了（v4.3.0）
 

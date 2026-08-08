@@ -23,6 +23,16 @@ Macでも作業できるが、以下の2点により**計測は必ずWindowsで�
   （→ データ管理）。2台で並行して都市データを触ると手間が増えるだけで得がない
 - Unityのバージョンは2台で一致させる。マイナー差でもプロジェクトのアップグレードが走る
 
+### Unityのバッチ実行
+
+同じマシンで`StoneKnights`・`FightingPieces`のUnityも動く。**プロセスを数える時は必ず
+プロジェクトパスで絞る** — `Get-Process Unity`は隣のリポジトリまで数えるため、そちらで
+数時間の測定が走っていると待ちが終わらず、「片付ける」と判断すると他の計算を消す。
+
+長時間の処理を1件ごとに書き出すこと、`-projectPath`を渡していても作業ディレクトリ側に
+ログが落ちることと併せて、[`~/AIFiles/docs/unity-batch-runs.md`](../docs/unity-batch-runs.md)を参照。
+M0での具体的な待ち方は[`docs/m0-plan.md`](docs/m0-plan.md) §2.1。
+
 ## 技術スタック
 
 - Unity（バージョン・レンダーパイプラインはM0着手時に決定 → `docs/requirements.md` §11）
