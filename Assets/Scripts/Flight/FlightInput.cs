@@ -23,6 +23,9 @@ namespace FeelFreeFlying.Flight
 
         /// <summary>開始地点に戻す。</summary>
         public bool Reset;
+
+        /// <summary>一人称と三人称を切り替える（押した瞬間だけtrue）。</summary>
+        public bool ToggleView;
     }
 
     /// <summary>
@@ -141,6 +144,7 @@ namespace FeelFreeFlying.Flight
             if (pad.buttonSouth.isPressed) { state.Boost = true; UsingGamepad = true; }
             if (pad.buttonEast.isPressed) { state.Level = true; UsingGamepad = true; }
             if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }
+            if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
         }
 
         private void ReadKeyboardAndMouse(ref FlightInputState state)
@@ -183,6 +187,8 @@ namespace FeelFreeFlying.Flight
                 virtualStick = Vector2.zero; // 水平に戻す時はマウスの蓄積も消す
                 UsingGamepad = false;
             }
+
+            if (keyboard.cKey.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = false; }
 
             if (keyboard.rKey.wasPressedThisFrame)
             {

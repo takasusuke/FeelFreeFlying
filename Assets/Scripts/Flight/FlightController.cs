@@ -84,6 +84,20 @@ namespace FeelFreeFlying.Flight
         public float RollDegrees => rollDegrees;
         public bool IsBoosting { get; private set; }
 
+        private bool viewToggleRequested;
+
+        /// <summary>
+        /// 視点切替が押されたか。**押されていたらtrueを返して同時に消費する。**
+        /// 入力は<see cref="FlightController"/>が1フレームに1回だけ読む（マウスのデルタを
+        /// 二重に積まないため）ので、カメラ側はここ経由で受け取る。
+        /// </summary>
+        public bool ConsumeViewToggle()
+        {
+            if (!viewToggleRequested) return false;
+            viewToggleRequested = false;
+            return true;
+        }
+
         private void Awake()
         {
             if (input == null) input = GetComponent<FlightInput>();
@@ -97,6 +111,8 @@ namespace FeelFreeFlying.Flight
         {
             FlightInputState state = input != null ? input.Read() : default;
             float dt = Time.deltaTime;
+
+            if (state.ToggleView) viewToggleRequested = true;
 
             if (state.Reset)
             {

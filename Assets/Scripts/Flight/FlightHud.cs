@@ -51,8 +51,8 @@ namespace FeelFreeFlying.Flight
 
             bool pad = input != null && input.UsingGamepad;
             string hints = pad
-                ? "左スティック: 傾ける / トリガー: 加減速 / A: ブースト / B: 水平 / SELECT: やり直す / Esc: カーソルを返す"
-                : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / ↑↓: 機首 / Shift: ブースト / Space: 水平 / R: やり直す / Esc: カーソルを返す";
+                ? "左スティック: 傾ける / トリガー: 加減速 / A: ブースト / B: 水平 / Y: 視点 / SELECT: やり直す / Esc: カーソルを返す"
+                : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / ↑↓: 機首 / Shift: ブースト / Space: 水平 / C: 視点 / R: やり直す / Esc: カーソルを返す";
 
             if (input != null && !input.CursorCaptured)
             {

@@ -25,7 +25,8 @@ namespace FeelFreeFlying.EditorTools
     {
         private const string SourceScene = "Assets/Scenes/M0Benchmark.unity";
         private const string FlightScene = "Assets/Scenes/M1Flight.unity";
-        private const string MaterialPath = "Assets/Settings/Rendering/PlaceholderCraft.mat";
+        private const string SuitMaterialPath = "Assets/Settings/Rendering/PlaceholderFlyerSuit.mat";
+        private const string CapeMaterialPath = "Assets/Settings/Rendering/PlaceholderFlyerCape.mat";
 
         /// <summary>街を見下ろせて、かつ建物が迫って見える高さ。</summary>
         private const float StartAltitude = 180f;
@@ -50,8 +51,9 @@ namespace FeelFreeFlying.EditorTools
             Bounds cityBounds = CalculateCityBounds();
             RemoveBenchmarkRig();
 
-            Material material = LoadOrCreateMaterial();
-            GameObject craft = CreateCraft(cityBounds, material);
+            Material suit = LoadOrCreateMaterial(SuitMaterialPath, new Color(0.18f, 0.24f, 0.38f));
+            Material cape = LoadOrCreateMaterial(CapeMaterialPath, new Color(0.62f, 0.14f, 0.16f));
+            GameObject craft = CreateCraft(cityBounds, suit, cape);
             SetUpCamera(craft.GetComponent<FlightController>());
 
             var hud = new GameObject("FlightHud");
@@ -95,35 +97,59 @@ namespace FeelFreeFlying.EditorTools
             }
         }
 
-        private static GameObject CreateCraft(Bounds cityBounds, Material material)
+        /// <summary>
+        /// 飛ぶのは航空機ではなく**人**（腕を前に伸ばしてマントをなびかせる姿勢）。
+        /// 見た目は仮だが、**一人称にした時に自分の腕が視界に入る**位置関係だけは合わせてある。
+        /// これが無いと一人称が「浮いているカメラ」になり、身体で飛んでいる感じが出ない。
+        ///
+        /// 前方は+Z、上は+Y。全長は指先から足先まで約1.8m。
+        /// </summary>
+        private static GameObject CreateCraft(Bounds cityBounds, Material suit, Material cape)
         {
             Vector3 center = cityBounds.center;
             var start = new Vector3(center.x, StartAltitude, center.z - StartDistance);
 
-            var craft = new GameObject("Glider");
-            craft.transform.SetPositionAndRotation(start, Quaternion.identity); // 街の方（+Z）を向く
+            var flyer = new GameObject("Flyer");
+            flyer.transform.SetPositionAndRotation(start, Quaternion.identity); // 街の方（+Z）を向く
 
-            craft.AddComponent<FlightInput>();
-            craft.AddComponent<FlightController>();
+            flyer.AddComponent<FlightInput>();
+            flyer.AddComponent<FlightController>();
 
-            // 見た目は仮。**自分の姿が見えること**が三人称の目的なので、形が分かれば足りる
-            AddPart(craft.transform, "Body", new Vector3(0f, 0f, 0f), new Vector3(1.2f, 0.8f, 6f), material);
-            AddPart(craft.transform, "Wing", new Vector3(0f, 0f, -0.4f), new Vector3(9f, 0.25f, 1.6f), material);
-            AddPart(craft.transform, "TailWing", new Vector3(0f, 0.2f, -2.8f), new Vector3(3.2f, 0.2f, 0.9f), material);
-            AddPart(craft.transform, "TailFin", new Vector3(0f, 0.9f, -2.8f), new Vector3(0.2f, 1.4f, 0.9f), material);
+            var alongZ = new Vector3(90f, 0f, 0f); // カプセルの軸をY（既定）から進行方向Zへ倒す
 
-            return craft;
+            AddPart(flyer.transform, "Torso", PrimitiveType.Capsule,
+                new Vector3(0f, 0f, 0.05f), alongZ, new Vector3(0.34f, 0.42f, 0.34f), suit);
+
+            AddPart(flyer.transform, "Head", PrimitiveType.Sphere,
+                new Vector3(0f, 0.13f, 0.5f), Vector3.zero, new Vector3(0.26f, 0.26f, 0.26f), suit);
+
+            AddPart(flyer.transform, "ArmLeft", PrimitiveType.Capsule,
+                new Vector3(-0.19f, 0.02f, 0.58f), alongZ, new Vector3(0.12f, 0.32f, 0.12f), suit);
+            AddPart(flyer.transform, "ArmRight", PrimitiveType.Capsule,
+                new Vector3(0.19f, 0.02f, 0.58f), alongZ, new Vector3(0.12f, 0.32f, 0.12f), suit);
+
+            AddPart(flyer.transform, "LegLeft", PrimitiveType.Capsule,
+                new Vector3(-0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
+            AddPart(flyer.transform, "LegRight", PrimitiveType.Capsule,
+                new Vector3(0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
+
+            // マント。速度感は自分の身体の一部が後ろへ流れているほうが分かりやすい
+            AddPart(flyer.transform, "Cape", PrimitiveType.Cube,
+                new Vector3(0f, 0.1f, -0.62f), new Vector3(-8f, 0f, 0f), new Vector3(0.62f, 0.02f, 1.2f), cape);
+
+            return flyer;
         }
 
-        private static void AddPart(Transform parent, string name, Vector3 localPosition, Vector3 scale,
-            Material material)
+        private static void AddPart(Transform parent, string name, PrimitiveType primitive,
+            Vector3 localPosition, Vector3 localEuler, Vector3 scale, Material material)
         {
-            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject part = GameObject.CreatePrimitive(primitive);
             part.name = name;
             part.transform.SetParent(parent, false);
             part.transform.localPosition = localPosition;
+            part.transform.localRotation = Quaternion.Euler(localEuler);
             part.transform.localScale = scale;
-            part.GetComponent<MeshRenderer>().sharedMaterial = material;
+            if (material != null) part.GetComponent<MeshRenderer>().sharedMaterial = material;
 
             // 当たり判定は持たせない。都市側にコライダーが無く（→ m0-plan.md §3）、
             // 落下も墜落も作らない方針のため（CLAUDE.md 不変条件3）
@@ -150,9 +176,9 @@ namespace FeelFreeFlying.EditorTools
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static Material LoadOrCreateMaterial()
+        private static Material LoadOrCreateMaterial(string path, Color color)
         {
-            var existing = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (existing != null) return existing;
 
             Shader shader = Shader.Find("Universal Render Pipeline/Lit");
@@ -162,8 +188,8 @@ namespace FeelFreeFlying.EditorTools
                 return null;
             }
 
-            var material = new Material(shader) { color = new Color(0.92f, 0.93f, 0.96f) };
-            AssetDatabase.CreateAsset(material, MaterialPath);
+            var material = new Material(shader) { color = color };
+            AssetDatabase.CreateAsset(material, path);
             AssetDatabase.SaveAssets();
             return material;
         }
