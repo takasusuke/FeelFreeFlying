@@ -21,6 +21,9 @@ namespace FeelFreeFlying.Benchmark
     ///   3. Label に測定条件（例: "地域単位_URP"）を入れて再生
     ///   4. 終了後、Consoleに出力先パスが出る
     ///
+    /// ビルドした実行ファイルでは、ラベル・自動終了・HUDをコマンドラインで上書きできる
+    /// （<see cref="ApplyCommandLineOverrides"/>）。
+    ///
     /// 注意: 入力（キー操作）は一切扱わない。旧Input Managerに依存すると
     /// Input Systemパッケージ構成のプロジェクトで実行時例外になるため。
     /// </summary>
@@ -77,6 +80,8 @@ namespace FeelFreeFlying.Benchmark
 
         private void Awake()
         {
+            ApplyCommandLineOverrides();
+
             if (target == null) target = transform;
             if (path == null) path = FindFirstObjectByType<FlightBenchmarkPath>();
 
@@ -87,6 +92,32 @@ namespace FeelFreeFlying.Benchmark
             {
                 QualitySettings.vSyncCount = 0;
                 Application.targetFrameRate = -1;
+            }
+        }
+
+        /// <summary>
+        /// ビルドした実行ファイルを条件だけ変えて何度も流せるように、ラベルと自動終了を
+        /// コマンドラインから上書きできるようにする。条件ごとにビルドし直さないための措置。
+        ///
+        ///   FeelFreeFlying-M0.exe -ffbenchmark-label 地域単位_URP -ffbenchmark-quit
+        /// </summary>
+        private void ApplyCommandLineOverrides()
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "-ffbenchmark-label" when i + 1 < args.Length:
+                        label = args[i + 1];
+                        break;
+                    case "-ffbenchmark-quit":
+                        quitOnFinish = true;
+                        break;
+                    case "-ffbenchmark-nohud":
+                        showHud = false;
+                        break;
+                }
             }
         }
 
