@@ -38,6 +38,9 @@ namespace FeelFreeFlying.EditorTools
         /// <summary>初回のサーバーインポートで取得したCityGML（gitignore済み・再取得可能）。</summary>
         private const string DatasetPath = "Data/Plateau/13104_shinjuku-ku_pref_2025_citygml_1_op";
 
+        /// <summary>属性表と同じ場所（`M2AttributeExport`の出力先）。</summary>
+        private const string AttributeDir = "Data/Plateau/attributes";
+
         /// <summary>
         /// 新宿駅周辺の3次メッシュ4枚（約2km四方）。**粒度を比較する以上、範囲は固定でなければならない。**
         /// 広げると主要地物単位でUnityが落ちる（6.4 x 6.8kmで異常終了した）。
@@ -288,6 +291,8 @@ namespace FeelFreeFlying.EditorTools
                     duplicates++;
                 }
 
+                WriteLod2Index(targetScenePath, lod2Buildings.Keys);
+
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene, targetScenePath);
 
@@ -305,6 +310,25 @@ namespace FeelFreeFlying.EditorTools
                 if (exitWhenDone) EditorApplication.Exit(1);
                 return 0;
             }
+        }
+
+        /// <summary>
+        /// LOD2で入った建物の名前を書き出す。
+        ///
+        /// **LOD1で補った建物にはテクスチャが無い。** どちらの経路で入ったかは
+        /// 取り込んだ瞬間にしか分からないので、ここで記録しておく。
+        /// ランドマークの選定（`M2Landmarks`）は、実写が付く建物だけを候補にしたい
+        /// （上位40棟のうち5棟が「実写のはずなのに何も無い」状態になった → docs/m2-plan.md §4.4）。
+        /// </summary>
+        private static void WriteLod2Index(string targetScenePath, IEnumerable<string> names)
+        {
+            string directory = Path.Combine(AttributeDir, "lod2");
+            Directory.CreateDirectory(directory);
+
+            string path = Path.Combine(directory,
+                Path.GetFileNameWithoutExtension(targetScenePath) + ".txt");
+
+            File.WriteAllLines(path, names.OrderBy(name => name, StringComparer.Ordinal));
         }
 
         /// <summary>タイルのシーンは初回に作る。計測シーンと違ってリグは要らない。</summary>

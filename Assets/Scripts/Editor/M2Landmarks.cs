@@ -212,6 +212,22 @@ namespace FeelFreeFlying.EditorTools
                 candidates.Add((cells[0], height));
             }
 
+            // **実写が付く建物だけを候補にする。** LOD1で補った建物は元データにテクスチャが無く、
+            // ランドマークに選んでも何も残らない（→ docs/m2-plan.md §4.4）。
+            // 記録が無い場合（古いタイル）は絞らない
+            HashSet<string> lod2 = LoadLod2Index();
+            if (lod2.Count > 0)
+            {
+                int before = candidates.Count;
+                candidates = candidates.Where(pair => lod2.Contains(pair.Id)).ToList();
+                Debug.Log($"[M2Landmark] 実写が付く建物に絞り込み: {before} → {candidates.Count} 棟");
+            }
+            else
+            {
+                Debug.LogWarning("[M2Landmark] LOD2の記録がありません。テクスチャの無い建物が混ざります" +
+                                 "（タイルを取り込み直すと記録されます）。");
+            }
+
             var selected = candidates.OrderByDescending(pair => pair.Height).Take(ResolveCount()).ToList();
             if (selected.Count == 0) return new HashSet<string>();
 
@@ -219,6 +235,28 @@ namespace FeelFreeFlying.EditorTools
             shortest = selected[^1].Height;
 
             return new HashSet<string>(selected.Select(pair => pair.Id), StringComparer.Ordinal);
+        }
+
+        /// <summary>
+        /// LOD2で入った建物の一覧（`M0CityImport`がタイルごとに書く）。
+        /// 無ければ空を返す——**古いタイルでも動くようにする**ため、絞り込みは任意にしてある。
+        /// </summary>
+        private static HashSet<string> LoadLod2Index()
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            string directory = Path.Combine(Path.GetDirectoryName(AttributeCsv) ?? string.Empty, "lod2");
+
+            if (!Directory.Exists(directory)) return names;
+
+            foreach (string path in Directory.GetFiles(directory, "*.txt"))
+            {
+                foreach (string line in File.ReadLines(path))
+                {
+                    if (line.Length > 0) names.Add(line.Trim());
+                }
+            }
+
+            return names;
         }
 
         /// <summary>どのタイルに何棟入っているか。**シーンを開かずに名前だけ数える。**</summary>
