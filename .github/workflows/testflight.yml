@@ -32,6 +32,14 @@ name: TestFlight
 on:
   workflow_dispatch: {}
 
+concurrency:
+  # AppFactory/StoneKnights/NumberBullet2と同じ理由: 同時に2つ走ると同じ
+  # ビルド番号を取り合って一方が失敗するため、直列にする。今はworkflow_dispatch
+  # のみで衝突しにくいが、on: push復活時(冒頭コメント参照)にも効くよう
+  # 先に揃えておく。
+  group: testflight
+  cancel-in-progress: false
+
 jobs:
   build:
     # self-hosted(このMac): 同じApple Developerチームの他リポジトリ
