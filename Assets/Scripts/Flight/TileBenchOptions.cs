@@ -37,6 +37,13 @@ namespace FeelFreeFlying.Flight
                 }
             }
 
+            // **焼いたオクルージョンカリングを切る。** 効果を同じビルドで測るため
+            if (System.Array.IndexOf(args, "-ffm2bench-noocclusion") >= 0)
+            {
+                foreach (Camera camera in Camera.allCameras) camera.useOcclusionCulling = false;
+                Debug.Log("[BenchOptions] オクルージョンカリングを切った");
+            }
+
             if (!removeColliders && !plainMaterial) yield break;
 
             yield return new WaitForSeconds(applyAfterSeconds);

@@ -54,6 +54,7 @@ namespace FeelFreeFlying.EditorTools
             try
             {
                 WriteCatalog(GridCodes.Where(code => File.Exists(TileScenePath(code))));
+                M2TileOcclusion.BakeAll();
                 EditorApplication.Exit(M2Verify.Check() ? 0 : 1);
             }
             catch (Exception exception)
@@ -89,6 +90,10 @@ namespace FeelFreeFlying.EditorTools
                 }
 
                 Debug.Log($"[M2Tile] 完了: {counts.Count} タイル / 合計 {counts.Values.Sum()} 棟");
+
+                // **オクルージョンカリングまでを1コマンドに含める。** 別工程にすると
+                // 焼き忘れたタイルが混ざり、どのタイルがどの条件か分からなくなる
+                M2TileOcclusion.BakeAll();
 
                 // **作った直後に確かめる。** ここを人の目に任せると、
                 // 4枚が原点に重なっていても気づかない（→ m2-plan.md §4.2）
