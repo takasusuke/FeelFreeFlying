@@ -232,6 +232,14 @@ namespace FeelFreeFlying.EditorTools
             _ = RunFallbackAsync(false, TexturePackingResolution.W2048H2048, exitWhenDone: false);
 
         private static async Task RunFallbackAsync(bool includeTexture,
+            TexturePackingResolution textureResolution, bool exitWhenDone) =>
+            await ImportFallbackInto(ScenePath, includeTexture, textureResolution, exitWhenDone);
+
+        /// <summary>
+        /// LOD2優先＋LOD1補完の取り込みを、**指定したシーンへ**行う。
+        /// タイル単位のパイプライン（docs/m2-plan.md §2）から1メッシュずつ呼ぶために切り出した。
+        /// </summary>
+        public static async Task<int> ImportFallbackInto(string targetScenePath, bool includeTexture,
             TexturePackingResolution textureResolution, bool exitWhenDone)
         {
             try
@@ -242,7 +250,7 @@ namespace FeelFreeFlying.EditorTools
                     throw new DirectoryNotFoundException($"CityGMLが見つかりません: {datasetFullPath}");
                 }
 
-                Scene scene = OpenBenchmarkScene();
+                Scene scene = OpenOrCreateScene(targetScenePath);
                 RemoveExistingCityModels();
 
                 const MeshGranularity granularity = MeshGranularity.PerPrimaryFeatureObject;
@@ -271,20 +279,43 @@ namespace FeelFreeFlying.EditorTools
                 }
 
                 EditorSceneManager.MarkSceneDirty(scene);
-                EditorSceneManager.SaveScene(scene, ScenePath);
+                EditorSceneManager.SaveScene(scene, targetScenePath);
 
                 int total = FindBuildings().Count;
                 Debug.Log(
                     $"[M0Import] 完了: 建物 {total} 棟（LOD2 {lod2Buildings.Count} 棟 + " +
-                    $"LOD1で補った {total - lod2Buildings.Count} 棟 / 重複削除 {duplicates} 棟）");
+                    $"LOD1で補った {total - lod2Buildings.Count} 棟 / 重複削除 {duplicates} 棟）→ {targetScenePath}");
 
                 if (exitWhenDone) EditorApplication.Exit(0);
+                return total;
             }
             catch (Exception exception)
             {
                 Debug.LogError($"[M0Import] 失敗: {exception}");
                 if (exitWhenDone) EditorApplication.Exit(1);
+                return 0;
             }
+        }
+
+        /// <summary>タイルのシーンは初回に作る。計測シーンと違ってリグは要らない。</summary>
+        private static Scene OpenOrCreateScene(string path)
+        {
+            if (path == ScenePath) return OpenBenchmarkScene();
+
+            if (File.Exists(path)) return EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+
+            Scene created = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            EditorSceneManager.SaveScene(created, path);
+            return created;
+        }
+
+        /// <summary>タイル1枚を取り込む。<see cref="gridCodes"/>を差し替えてから呼ぶ。</summary>
+        public static async Task<int> ImportTile(string gridCode, string targetScenePath)
+        {
+            gridCodes = new[] { gridCode };
+            return await ImportFallbackInto(targetScenePath, false,
+                TexturePackingResolution.W2048H2048, exitWhenDone: false);
         }
 
         private static List<MeshRenderer> FindBuildings()

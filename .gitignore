@@ -68,3 +68,12 @@ desktop.ini
 # 計測シーンに紐づく生成物（オクルージョンカリングのデータ。40MB超）
 /Assets/Scenes/M0Benchmark/
 /Assets/Scenes/M0Benchmark.meta
+
+# タイルのシーン（都市データを含む。M2: 街をタイルに割って取り込む で再生成）
+/Assets/Scenes/Tiles/
+/Assets/Scenes/Tiles.meta
+/Assets/Scenes/M2TileLoad.unity
+/Assets/Scenes/M2TileLoad.unity.meta
+# SDKの動的タイルを試した時の残骸（採用しない → docs/m2-plan.md §1）
+/Assets/Scenes/M3DynamicTile.unity
+/Assets/Scenes/M3DynamicTile.unity.meta
