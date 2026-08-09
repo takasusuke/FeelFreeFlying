@@ -3,36 +3,81 @@ using UnityEngine;
 namespace FeelFreeFlying.Flight
 {
     /// <summary>
-    /// 三人称カメラ（`requirements.md` §9「自分の姿が見える方が浮遊感が出る」）。
+    /// 飛行カメラ。三人称と一人称を切り替えられる。
     ///
-    /// 機体の回転をそのまま追うと、ロールのたびに地平線が回って酔う。**ロールは一部しか拾わない**。
-    /// 速度が上がると画角を広げ、後ろに引く——速度計を見なくても速さが分かるようにするため。
+    /// 要件（`requirements.md` §9）は三人称を基本としているが、**一人称のほうが
+    /// 「自分が飛んでいる」感じが強い**という判断もありうる。M1はそこを決める工程なので、
+    /// 両方を用意して試遊で選ぶ。**選んだら要件側を直す。**
+    ///
+    /// 三人称では機体の回転をそのまま追わない。ロールのたびに地平線が回って酔うため、
+    /// ロールは一部しか拾わない。一人称は逆に、拾わなすぎると首だけ動かない人形のようになるので、
+    /// 比率を別に持つ。
     /// </summary>
     [RequireComponent(typeof(Camera))]
     [DisallowMultipleComponent]
     public sealed class FlightCamera : MonoBehaviour
     {
+        public enum ViewMode
+        {
+            ThirdPerson,
+            FirstPerson,
+        }
+
         [Header("参照")]
         [SerializeField] private FlightController target;
 
-        [Header("位置")]
-        [Tooltip("機体から見た定位置。zが後ろ、yが上")]
-        [SerializeField] private Vector3 offset = new Vector3(0f, 3.2f, -11f);
+        [Header("視点")]
+        [Tooltip("既定は一人称。試遊の結果、そちらのほうが飛んでいる感じが強いと判断した")]
+        [SerializeField] private ViewMode mode = ViewMode.FirstPerson;
+
+        [Tooltip("一人称のとき自分の身体を消す。**残すと視界の中央を塞ぐ**")]
+        [SerializeField] private bool hideBodyInFirstPerson = true;
+
+        [Header("三人称")]
+        [Tooltip("機体から見た定位置。zが後ろ、yが上。" +
+                 "**上げすぎるとマントを見下ろす形になり、身体が隠れる**")]
+        [SerializeField] private Vector3 thirdPersonOffset = new Vector3(0f, 0.5f, -4.8f);
 
         [Tooltip("最高速で追加で後ろに引く距離 (m)")]
-        [SerializeField, Range(0f, 20f)] private float speedPullBack = 5f;
+        [SerializeField, Range(0f, 20f)] private float speedPullBack = 2.5f;
 
         [Tooltip("追従の鈍さ (秒)。大きいほど機体が先に動いて速く見える")]
         [SerializeField, Range(0.01f, 1f)] private float followSmoothing = 0.12f;
 
-        [Header("向き")]
-        [Tooltip("機体のどれだけ前方を見るか (m)")]
-        [SerializeField, Min(0f)] private float lookAhead = 14f;
+        [Tooltip("どれだけ前方を見るか (m)")]
+        [SerializeField, Min(0f)] private float lookAhead = 12f;
 
-        [Tooltip("機体のロールをカメラに反映する割合。1にすると地平線が一緒に回って酔う")]
+        [Tooltip("ロールをカメラに反映する割合。1にすると地平線が一緒に回って酔う")]
         [SerializeField, Range(0f, 1f)] private float rollInfluence = 0.25f;
 
         [SerializeField, Range(0.01f, 1f)] private float rotationSmoothing = 0.1f;
+
+        [SerializeField, Min(0.01f)] private float thirdPersonNearClip = 1f;
+
+        [Header("一人称")]
+        [Tooltip("飛行中の目の位置（機体ローカル）。身体は消すので、頭より少し前に出す")]
+        [SerializeField] private Vector3 firstPersonOffset = new Vector3(0f, 0.16f, 0.75f);
+
+        [Tooltip("歩行中の目の位置。立っている姿勢なので目線が上がる")]
+        [SerializeField] private Vector3 walkFirstPersonOffset = new Vector3(0f, 0.72f, 0.12f);
+
+        [Tooltip("一人称でのロールの反映。三人称より強めでないと身体と視界がずれる")]
+        [SerializeField, Range(0f, 1f)] private float firstPersonRollInfluence = 0.7f;
+
+        [Tooltip("一人称の追従の鈍さ (秒)。**小さくする。** 遅れると強く酔う")]
+        [SerializeField, Range(0f, 0.3f)] private float firstPersonSmoothing = 0.03f;
+
+        [Tooltip("腕が映るように近くまで描く。三人称の1mのままだと腕が切れる")]
+        [SerializeField, Min(0.01f)] private float firstPersonNearClip = 0.12f;
+
+        [Header("視点（右スティック）")]
+        [Tooltip("左右に振れる角度")]
+        [SerializeField, Range(0f, 180f)] private float lookYawRange = 160f;
+
+        [Tooltip("上下に振れる角度")]
+        [SerializeField, Range(0f, 89f)] private float lookPitchRange = 80f;
+
+        [SerializeField, Min(1f)] private float lookRate = 150f;
 
         [Header("画角")]
         [SerializeField, Range(30f, 120f)] private float fieldOfViewMin = 62f;
@@ -42,49 +87,188 @@ namespace FeelFreeFlying.Flight
 
         private Camera cameraComponent;
         private Vector3 followVelocity;
+        private Renderer[] bodyRenderers;
+
+        /// <summary>視点のずれ（x=ヨー, y=ピッチ）。戻すまで保持する。</summary>
+        private Vector2 look;
+
+        /// <summary>前フレームの機体の向き。回った角度を打ち消すために持つ。</summary>
+        private float previousYaw;
+        private float previousPitch;
+
+        /// <summary>いまの視点。HUDの表示に使う。</summary>
+        public ViewMode Mode => mode;
 
         private void Awake()
         {
             cameraComponent = GetComponent<Camera>();
             if (target == null) target = FindFirstObjectByType<FlightController>();
-            if (target != null) SnapToTarget();
+            if (target != null) bodyRenderers = target.GetComponentsInChildren<Renderer>(true);
+
+            ApplyNearClip();
+            ApplyBodyVisibility();
+
+            if (target != null)
+            {
+                previousYaw = target.transform.eulerAngles.y;
+                previousPitch = target.PitchDegrees;
+                SnapToTarget();
+            }
+        }
+
+        /// <summary>
+        /// 一人称のとき自分の姿を消す。
+        ///
+        /// 腕が見えるほうが身体で飛んでいる感じが出ると考えて最初は残していたが、
+        /// **実際には視界の中央を塞いで街が見えなくなった。** 姿は三人称で見えれば足りる。
+        /// </summary>
+        private void ApplyBodyVisibility()
+        {
+            if (bodyRenderers == null) return;
+
+            bool visible = !(hideBodyInFirstPerson && mode == ViewMode.FirstPerson);
+            foreach (Renderer renderer in bodyRenderers)
+            {
+                if (renderer != null) renderer.enabled = visible;
+            }
         }
 
         private void LateUpdate()
         {
             if (target == null) return;
 
-            float dt = Time.deltaTime;
-            Transform craft = target.transform;
+            if (target.ConsumeViewToggle())
+            {
+                mode = mode == ViewMode.ThirdPerson ? ViewMode.FirstPerson : ViewMode.ThirdPerson;
+                ApplyNearClip();
+                ApplyBodyVisibility();
+                SnapToTarget();
+            }
 
-            // ヨーとピッチだけ拾った基準姿勢。ロールで真横に回り込まないようにする
-            Vector3 euler = craft.eulerAngles;
-            var basis = Quaternion.Euler(euler.x, euler.y, -target.RollDegrees * rollInfluence);
+            float dt = Time.deltaTime;
+            UpdateLook(dt);
+            if (mode == ViewMode.FirstPerson) UpdateFirstPerson(dt); else UpdateThirdPerson(dt);
+            UpdateFieldOfView(dt);
+        }
+
+        private void UpdateThirdPerson(float dt)
+        {
+            Transform craft = target.transform;
+            Quaternion basis = Basis(rollInfluence);
 
             Vector3 desired = craft.position +
-                              basis * (offset + Vector3.back * (speedPullBack * target.SpeedRatio));
+                              basis * (thirdPersonOffset + Vector3.back * (speedPullBack * target.SpeedRatio));
 
             transform.position = Vector3.SmoothDamp(
                 transform.position, desired, ref followVelocity, followSmoothing);
 
-            Vector3 lookTarget = craft.position + craft.forward * lookAhead;
+            // 首振りぶんはbasisに入っているので、機体の前ではなく**見ている方向**を狙う
+            Vector3 lookTarget = craft.position + basis * Vector3.forward * lookAhead;
             var desiredRotation = Quaternion.LookRotation(lookTarget - transform.position, basis * Vector3.up);
             transform.rotation = Quaternion.Slerp(
                 transform.rotation, desiredRotation, 1f - Mathf.Exp(-dt / rotationSmoothing));
-
-            float desiredFov = Mathf.Lerp(fieldOfViewMin, fieldOfViewMax, target.SpeedRatio) +
-                               (target.IsBoosting ? boostFieldOfViewBonus : 0f);
-            cameraComponent.fieldOfView = Mathf.Lerp(
-                cameraComponent.fieldOfView, desiredFov, 1f - Mathf.Exp(-dt / fieldOfViewSmoothing));
         }
 
-        /// <summary>補間を挟まずに定位置へ。開始時とリセット時に使う。</summary>
+        private void UpdateFirstPerson(float dt)
+        {
+            Transform craft = target.transform;
+            Vector3 desired = craft.TransformPoint(EyeOffset);
+            Quaternion desiredRotation = Basis(firstPersonRollInfluence);
+
+            if (firstPersonSmoothing <= 0f)
+            {
+                transform.SetPositionAndRotation(desired, desiredRotation);
+                return;
+            }
+
+            float t = 1f - Mathf.Exp(-dt / firstPersonSmoothing);
+            transform.position = Vector3.Lerp(transform.position, desired, t);
+            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, t);
+        }
+
+        /// <summary>目の位置。飛行と歩行で姿勢が違うので分ける。</summary>
+        private Vector3 EyeOffset => target.IsWalking ? walkFirstPersonOffset : firstPersonOffset;
+
+        /// <summary>
+        /// 右スティックで視点だけを動かす。**進路は変わらない。**
+        ///
+        /// **スティックを戻しても視点は戻さない。** 自動で正面へ戻すと、
+        /// 「高度を保ったまま下を見続ける」ができない。正面に戻したい時はR3で明示的に戻す。
+        ///
+        /// 視点のずれは機体からの相対だが、**機体が回った角度ぶんを引いて世界に対して固定する**。
+        /// そうしないと、右を見ながら右へ旋回した時に視界も一緒に右へ流れて、
+        /// 「さっき見ていた方へ進む」ができない。旋回すると機体が視線に追いついてきて、
+        /// ずれが自然に0へ近づく。
+        /// </summary>
+        private void UpdateLook(float dt)
+        {
+            float yawNow = target.transform.eulerAngles.y;
+            float pitchNow = target.PitchDegrees;
+
+            // 歩行中は視点がそのまま身体の向きなので、打ち消しも保持もしない
+            if (target.IsWalking)
+            {
+                look = Vector2.zero;
+                previousYaw = yawNow;
+                previousPitch = pitchNow;
+                return;
+            }
+
+            if (target.ConsumeRecenterView()) look = Vector2.zero;
+
+            look.x -= Mathf.DeltaAngle(previousYaw, yawNow);
+            look.y -= pitchNow - previousPitch;
+            previousYaw = yawNow;
+            previousPitch = pitchNow;
+
+            Vector2 input = target.LookInput;
+            look.x += input.x * lookRate * dt;
+            look.y += input.y * lookRate * dt;
+
+            look.x = Mathf.Clamp(look.x, -lookYawRange, lookYawRange);
+            look.y = Mathf.Clamp(look.y, -lookPitchRange, lookPitchRange);
+        }
+
+        /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。視点のずれを最後に足す。</summary>
+        private Quaternion Basis(float roll)
+        {
+            Vector3 euler = target.transform.eulerAngles;
+            var attitude = Quaternion.Euler(euler.x, euler.y, -target.RollDegrees * roll);
+            return attitude * Quaternion.Euler(-look.y, look.x, 0f);
+        }
+
+        private void UpdateFieldOfView(float dt)
+        {
+            float desired = Mathf.Lerp(fieldOfViewMin, fieldOfViewMax, target.SpeedRatio) +
+                            (target.IsBoosting ? boostFieldOfViewBonus : 0f);
+            cameraComponent.fieldOfView = Mathf.Lerp(
+                cameraComponent.fieldOfView, desired, 1f - Mathf.Exp(-dt / fieldOfViewSmoothing));
+        }
+
+        private void ApplyNearClip()
+        {
+            if (cameraComponent == null) cameraComponent = GetComponent<Camera>();
+            cameraComponent.nearClipPlane =
+                mode == ViewMode.FirstPerson ? firstPersonNearClip : thirdPersonNearClip;
+        }
+
+        /// <summary>補間を挟まずに定位置へ。開始時・リセット時・視点切替時に使う。</summary>
         public void SnapToTarget()
         {
             Transform craft = target.transform;
-            transform.position = craft.position + craft.rotation * offset;
-            transform.rotation = Quaternion.LookRotation(
-                craft.position + craft.forward * lookAhead - transform.position, Vector3.up);
+
+            if (mode == ViewMode.FirstPerson)
+            {
+                transform.SetPositionAndRotation(
+                    craft.TransformPoint(EyeOffset), Basis(firstPersonRollInfluence));
+            }
+            else
+            {
+                transform.position = craft.position + craft.rotation * thirdPersonOffset;
+                transform.rotation = Quaternion.LookRotation(
+                    craft.position + craft.forward * lookAhead - transform.position, Vector3.up);
+            }
+
             followVelocity = Vector3.zero;
         }
     }

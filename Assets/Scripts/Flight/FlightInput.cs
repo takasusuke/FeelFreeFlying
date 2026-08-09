@@ -3,26 +3,65 @@ using UnityEngine.InputSystem;
 
 namespace FeelFreeFlying.Flight
 {
-    /// <summary>1フレーム分の操作入力。値はすべて正規化済み。</summary>
+    /// <summary>
+    /// 1フレーム分の入力。**用途ではなくデバイスの生の値**を持つ。
+    ///
+    /// 飛行と歩行で同じスティックの意味が変わる（左スティックは飛行なら姿勢、歩行なら移動）ため、
+    /// ここで「ピッチ」「移動」と決めてしまうと両立できない。割り当ては
+    /// <see cref="FlightController"/> がモードごとに行う。
+    /// </summary>
     public struct FlightInputState
     {
-        /// <summary>機首の上下。+1で上げ、-1で下げ。</summary>
-        public float Pitch;
+        /// <summary>マウスの仮想スティック（-1〜1）。飛行なら姿勢、歩行なら視線。</summary>
+        public Vector2 Aim;
 
-        /// <summary>ロール。+1で右へ傾ける（＝右旋回）。</summary>
-        public float Roll;
+        /// <summary>ゲームパッド左スティック。飛行なら姿勢、歩行なら移動。</summary>
+        public Vector2 LeftStick;
 
-        /// <summary>速度の増減。+1で加速、-1で減速。</summary>
-        public float Throttle;
+        /// <summary>ゲームパッド右スティック。歩行時の視線。</summary>
+        public Vector2 RightStick;
 
-        /// <summary>押している間だけ加速。</summary>
+        /// <summary>WASD。x=A/D、y=W/S。飛行ならロールとスロットル、歩行なら移動。</summary>
+        public Vector2 Keys;
+
+        /// <summary>矢印キー。y=↑↓（機首を明示的に上下させる）。</summary>
+        public Vector2 Arrows;
+
+        /// <summary>R2。飛行の加速（アナログ）。</summary>
+        public float Trigger;
+
+        /// <summary>L2。飛行の減速（アナログ）。歩行ではジャンプ。</summary>
+        public float TriggerLeft;
+
+        /// <summary>飛行中のブースト（L1）。</summary>
         public bool Boost;
 
-        /// <summary>姿勢を水平に戻す。</summary>
-        public bool Level;
+        /// <summary>歩行中のダッシュ（R1）。</summary>
+        public bool Dash;
 
-        /// <summary>開始地点に戻す。</summary>
+        /// <summary>飛行時に水平へ戻す。</summary>
+        public bool LevelFlight;
+
+        /// <summary>歩行時のジャンプ。</summary>
+        public bool Jump;
+
+        /// <summary>着地する / 飛び立つ。</summary>
+        public bool ToggleMotion;
+
         public bool Reset;
+        public bool ToggleView;
+
+        /// <summary>上下の反転を切り替える。</summary>
+        public bool ToggleInvert;
+
+        /// <summary>飛行中の当たり判定を切り替える。</summary>
+        public bool ToggleCollision;
+
+        /// <summary>視点を進行方向へ戻す（R3）。</summary>
+        public bool RecenterView;
+
+        /// <summary>落下中に慣性を消して真下へ落ちる（○ / 左Ctrl）。</summary>
+        public bool DropStraight;
     }
 
     /// <summary>
@@ -44,50 +83,64 @@ namespace FeelFreeFlying.Flight
         [Tooltip("入力を止めたときに中央へ戻る速さ（1秒あたりの割合）。0で戻らない")]
         [SerializeField, Range(0f, 5f)] private float mouseSelfCentering = 0.6f;
 
-        [SerializeField] private bool invertMousePitch = false;
-
         [Header("ゲームパッド")]
         [Tooltip("スティックの遊び")]
         [SerializeField, Range(0f, 0.5f)] private float stickDeadZone = 0.15f;
 
-        [SerializeField] private bool invertStickPitch = false;
-
         [Header("カーソル")]
-        [Tooltip("マウスで操作するので既定で隠す。Escで解除できる（Editorでは自動で戻る）")]
+        [Tooltip("マウスで操作するので既定で隠す。**Escで必ず解放できるようにしておくこと**")]
         [SerializeField] private bool lockCursor = true;
 
         private Vector2 virtualStick;
+        private bool cursorCaptured;
 
-        /// <summary>マウス由来の仮想スティック位置（-1〜1）。HUDの表示に使う。</summary>
-        public Vector2 VirtualStick => virtualStick;
+        /// <summary>カーソルを掴んでいるか。falseの間はマウスで操縦しない。</summary>
+        public bool CursorCaptured => cursorCaptured;
 
         /// <summary>直近に操作されたのがゲームパッドか。操作ヒントの出し分けに使う。</summary>
         public bool UsingGamepad { get; private set; }
 
+        /// <summary>直近に使ったパッドの名前。認識されているかを画面で確かめるために出す。</summary>
+        public string PadName { get; private set; }
+
+        /// <summary>PlayStation系のパッドか。操作ヒントの記号を出し分ける。</summary>
+        public bool IsPlayStationPad { get; private set; }
+
         private void OnEnable()
         {
-            if (!lockCursor) return;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            SetCursorCaptured(lockCursor);
+            LogDevices();
         }
 
-        private void OnDisable()
+        /// <summary>
+        /// 認識されている入力デバイスを一覧でログに出す。
+        ///
+        /// **パッドが動かない時、原因が「未接続」なのか「Input Systemが対応していない」なのかを
+        /// 切り分けられるようにするため。** PS5のDualSenseはHIDとして繋がるが、
+        /// Input Systemのバージョンによっては<see cref="Gamepad"/>として認識されないことがある。
+        /// その場合ここに名前は出るが<see cref="Gamepad.current"/>はnullになる。
+        /// </summary>
+        private void LogDevices()
         {
-            if (!lockCursor) return;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            foreach (InputDevice device in InputSystem.devices)
+            {
+                Debug.Log($"[FlightInput] 認識: {device.displayName} / {device.GetType().Name} " +
+                          $"(gamepadとして使える: {device is Gamepad})");
+            }
+
+            if (Gamepad.current == null) Debug.Log("[FlightInput] ゲームパッドは見つかりません。");
         }
+
+        private void OnDisable() => SetCursorCaptured(false);
 
         public FlightInputState Read()
         {
             var state = new FlightInputState();
 
+            UpdateCursorCapture();
             ReadGamepad(ref state);
             ReadKeyboardAndMouse(ref state);
 
-            state.Pitch = Mathf.Clamp(state.Pitch, -1f, 1f);
-            state.Roll = Mathf.Clamp(state.Roll, -1f, 1f);
-            state.Throttle = Mathf.Clamp(state.Throttle, -1f, 1f);
             return state;
         }
 
@@ -96,24 +149,49 @@ namespace FeelFreeFlying.Flight
             Gamepad pad = Gamepad.current;
             if (pad == null) return;
 
-            Vector2 stick = ApplyDeadZone(pad.leftStick.ReadValue());
-            if (stick.sqrMagnitude > 0f) UsingGamepad = true;
+            PadName = pad.displayName;
 
-            state.Pitch += invertStickPitch ? stick.y : -stick.y;
-            state.Roll += stick.x;
+            // DualShock/DualSenseはInput Systemが専用クラスで拾う。拾えない機種のために名前でも見る
+            IsPlayStationPad = pad is UnityEngine.InputSystem.DualShock.DualShockGamepad ||
+                               pad.displayName.IndexOf("DualSense", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               pad.displayName.IndexOf("Wireless Controller", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
-            float throttle = pad.rightTrigger.ReadValue() - pad.leftTrigger.ReadValue();
-            if (Mathf.Abs(throttle) > 0.01f) UsingGamepad = true;
-            state.Throttle += throttle;
+            state.LeftStick = ApplyDeadZone(pad.leftStick.ReadValue());
+            state.RightStick = ApplyDeadZone(pad.rightStick.ReadValue());
 
-            if (pad.buttonSouth.isPressed) { state.Boost = true; UsingGamepad = true; }
-            if (pad.buttonEast.isPressed) { state.Level = true; UsingGamepad = true; }
+            // R2で加速、L2で減速。L2は歩行中だけジャンプを兼ねる
+            state.Trigger = pad.rightTrigger.ReadValue();
+            state.TriggerLeft = pad.leftTrigger.ReadValue();
+
+            if (state.LeftStick.sqrMagnitude > 0f || state.RightStick.sqrMagnitude > 0f ||
+                Mathf.Abs(state.Trigger) > 0.01f)
+            {
+                UsingGamepad = true;
+            }
+
+            // 加減速はR2/L2（トリガー）。**顔ボタンの加減速はやめた**——結局使われず、
+            // ジャンプが押しにくい位置へ追いやられていた
+            if (pad.leftShoulder.isPressed) { state.Boost = true; UsingGamepad = true; }   // L1: 飛行のブースト
+            if (pad.rightShoulder.isPressed) { state.Dash = true; UsingGamepad = true; }   // R1: 歩行のダッシュ
+
+            bool jumpPressed = FlightSettings.Jump == JumpBinding.Cross
+                ? pad.buttonSouth.isPressed
+                : pad.leftTrigger.ReadValue() > 0.4f;
+            if (jumpPressed) { state.Jump = true; UsingGamepad = true; }
+            if (pad.buttonEast.wasPressedThisFrame) { state.DropStraight = true; UsingGamepad = true; }
+            if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
+            if (pad.rightStickButton.wasPressedThisFrame) { state.RecenterView = true; UsingGamepad = true; }
+            if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
+            if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
             if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }
+            if (pad.dpad.up.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = true; }
+            if (pad.dpad.down.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = true; }
         }
 
         private void ReadKeyboardAndMouse(ref FlightInputState state)
         {
-            Mouse mouse = Mouse.current;
+            // カーソルを返している間はマウスで操縦しない（他のアプリを触っている最中に動かないように）
+            Mouse mouse = lockCursor && !cursorCaptured ? null : Mouse.current;
             if (mouse != null)
             {
                 Vector2 delta = mouse.delta.ReadValue();
@@ -128,28 +206,45 @@ namespace FeelFreeFlying.Flight
                 }
 
                 virtualStick = Vector2.ClampMagnitude(virtualStick, 1f);
-
-                state.Pitch += invertMousePitch ? virtualStick.y : -virtualStick.y;
-                state.Roll += virtualStick.x;
+                state.Aim = virtualStick;
             }
 
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null) return;
 
-            if (keyboard.wKey.isPressed) { state.Throttle += 1f; UsingGamepad = false; }
-            if (keyboard.sKey.isPressed) { state.Throttle -= 1f; UsingGamepad = false; }
-            if (keyboard.aKey.isPressed) { state.Roll -= 1f; UsingGamepad = false; }
-            if (keyboard.dKey.isPressed) { state.Roll += 1f; UsingGamepad = false; }
-            if (keyboard.upArrowKey.isPressed) { state.Pitch += 1f; UsingGamepad = false; }
-            if (keyboard.downArrowKey.isPressed) { state.Pitch -= 1f; UsingGamepad = false; }
-            if (keyboard.leftShiftKey.isPressed) { state.Boost = true; UsingGamepad = false; }
+            var keys = Vector2.zero;
+            if (keyboard.wKey.isPressed) keys.y += 1f;
+            if (keyboard.sKey.isPressed) keys.y -= 1f;
+            if (keyboard.aKey.isPressed) keys.x -= 1f;
+            if (keyboard.dKey.isPressed) keys.x += 1f;
+            state.Keys = keys;
 
-            if (keyboard.spaceKey.isPressed)
+            var arrows = Vector2.zero;
+            if (keyboard.upArrowKey.isPressed) arrows.y += 1f;
+            if (keyboard.downArrowKey.isPressed) arrows.y -= 1f;
+            if (keyboard.leftArrowKey.isPressed) arrows.x -= 1f;
+            if (keyboard.rightArrowKey.isPressed) arrows.x += 1f;
+            state.Arrows = arrows;
+
+            if (keys.sqrMagnitude > 0f || arrows.sqrMagnitude > 0f) UsingGamepad = false;
+
+            if (keyboard.leftShiftKey.isPressed)
             {
-                state.Level = true;
-                virtualStick = Vector2.zero; // 水平に戻す時はマウスの蓄積も消す
+                state.Boost = true;
+                state.Dash = true;
                 UsingGamepad = false;
             }
+            if (keyboard.spaceKey.isPressed)
+            {
+                state.LevelFlight = true;
+                state.Jump = true;
+                UsingGamepad = false;
+            }
+            if (keyboard.fKey.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = false; }
+            if (keyboard.cKey.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = false; }
+            if (keyboard.iKey.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = false; }
+            if (keyboard.kKey.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = false; }
+            if (keyboard.leftCtrlKey.wasPressedThisFrame) { state.DropStraight = true; UsingGamepad = false; }
 
             if (keyboard.rKey.wasPressedThisFrame)
             {
@@ -157,6 +252,40 @@ namespace FeelFreeFlying.Flight
                 virtualStick = Vector2.zero;
                 UsingGamepad = false;
             }
+        }
+
+        /// <summary>マウスの蓄積を消す。姿勢リセットや着地で視線を戻す時に使う。</summary>
+        public void ClearAim() => virtualStick = Vector2.zero;
+
+        /// <summary>
+        /// Escでカーソルを返し、画面をクリックで掴み直す。
+        ///
+        /// **解放手段の無いカーソルロックを作らない。** ウィンドウ表示のビルドで閉じ込めると、
+        /// 他のアプリを操作できなくなり、ゲームを終了させることすらできない。
+        /// </summary>
+        private void UpdateCursorCapture()
+        {
+            if (!lockCursor) return;
+
+            Keyboard keyboard = Keyboard.current;
+            if (cursorCaptured && keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            {
+                SetCursorCaptured(false);
+                return;
+            }
+
+            Mouse mouse = Mouse.current;
+            if (!cursorCaptured && mouse != null && mouse.leftButton.wasPressedThisFrame)
+            {
+                SetCursorCaptured(true);
+            }
+        }
+
+        private void SetCursorCaptured(bool captured)
+        {
+            cursorCaptured = captured;
+            Cursor.lockState = captured ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !captured;
         }
 
         private Vector2 ApplyDeadZone(Vector2 stick)

@@ -20,6 +20,12 @@ namespace FeelFreeFlying.EditorTools
         [MenuItem("Tools/FeelFreeFlying/M1: 試遊用にビルドする (Windows64)")]
         public static void BuildWindows64()
         {
+            // **毎回シーンを作り直す。**
+            // Unityはコード側の既定値を変えても、既にシーンへ保存された値を書き換えない。
+            // 調整のたびにシーンを作り直さないと、直したはずの値が効かない
+            // （最高速度を85→150にしたのにシーンが85のままで「上がっていない」となった）。
+            M1SceneSetup.CreateFlightScene();
+
             string[] scenes = { FlightScene };
             if (!PlayerBuildUtil.BuildWindows64(scenes, OutputDir, ExecutableName))
             {
