@@ -20,7 +20,7 @@ namespace FeelFreeFlying.EditorTools
     public static class M2TileLoadBuild
     {
         private const string HarnessScene = "Assets/Scenes/M2TileLoad.unity";
-        private const string OutputDir = "Build/M2";
+        private const string OutputDir = "Build/M2TileLoad";
         private const string ExecutableName = "FeelFreeFlying-M2TileLoad.exe";
 
         [MenuItem("Tools/FeelFreeFlying/M2: タイル読み込みを測るビルド")]

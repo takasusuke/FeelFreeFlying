@@ -74,6 +74,13 @@ desktop.ini
 /Assets/Scenes/Tiles.meta
 /Assets/Scenes/M2TileLoad.unity
 /Assets/Scenes/M2TileLoad.unity.meta
+/Assets/Scenes/M2Flight.unity
+/Assets/Scenes/M2Flight.unity.meta
+/Assets/Scenes/M2Bench.unity
+/Assets/Scenes/M2Bench.unity.meta
+# タイルの位置表（タイルと一緒に再生成される。古いまま残ると街が別の場所に出る）
+/Assets/Resources/tile-catalog.json
+/Assets/Resources/tile-catalog.json.meta
 # SDKの動的タイルを試した時の残骸（採用しない → docs/m2-plan.md §1）
 /Assets/Scenes/M3DynamicTile.unity
 /Assets/Scenes/M3DynamicTile.unity.meta

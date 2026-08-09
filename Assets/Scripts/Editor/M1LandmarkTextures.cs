@@ -179,7 +179,8 @@ namespace FeelFreeFlying.EditorTools
 
         private const string MaterialFolder = "Packages/com.synesthesias.plateau-unity-sdk/Resources/PlateauSdkDefaultMaterials";
 
-        private static Material MaterialForHeight(float height, Dictionary<string, Material> cache)
+        /// <summary>高さから外壁を選ぶ。**タイル単位の変換からも同じ基準で呼ぶ**（M2）。</summary>
+        public static Material MaterialForHeight(float height, Dictionary<string, Material> cache)
         {
             string name = HeightTiers.First(tier => height < tier.MaxHeight).MaterialName;
 

@@ -51,6 +51,16 @@ namespace FeelFreeFlying.EditorTools
         /// <summary>取り込む範囲。`-ffimport-grid` で上書きできる（範囲の限界を測るため）。</summary>
         private static string[] gridCodes = DefaultGridCodes;
 
+        /// <summary>
+        /// 原点をどの範囲の中心に置くか。
+        ///
+        /// **タイルごとに取り込むと、SDKは毎回その範囲の中心を原点にする**
+        /// （`CityImportConfig.CreateWithAreaSelectResult`）。そのままだと
+        /// 4枚のタイルが全部原点に重なり、街が積み重なった1枚の塊になる。
+        /// 街全体を基準にすれば、タイルは実際の位置関係のまま並ぶ。
+        /// </summary>
+        private static string[] referenceGridCodes = DefaultGridCodes;
+
         /// <summary>平面直角座標系9系（東京）。</summary>
         private const int CoordinateZoneId = 9;
 
@@ -310,10 +320,16 @@ namespace FeelFreeFlying.EditorTools
             return created;
         }
 
-        /// <summary>タイル1枚を取り込む。<see cref="gridCodes"/>を差し替えてから呼ぶ。</summary>
-        public static async Task<int> ImportTile(string gridCode, string targetScenePath)
+        /// <summary>
+        /// タイル1枚を取り込む。
+        /// **原点は街全体（<paramref name="allGridCodes"/>）の中心に置く**ので、
+        /// 別々に取り込んだタイルを並べても位置が合う。
+        /// </summary>
+        public static async Task<int> ImportTile(string gridCode, string targetScenePath,
+            string[] allGridCodes)
         {
             gridCodes = new[] { gridCode };
+            referenceGridCodes = allGridCodes;
             return await ImportFallbackInto(targetScenePath, false,
                 TexturePackingResolution.W2048H2048, exitWhenDone: false);
         }
@@ -360,6 +376,11 @@ namespace FeelFreeFlying.EditorTools
                     new ConfigBeforeAreaSelect(datasetConfig, CoordinateZoneId),
                     codes,
                     AreaSelectResult.ResultReason.Confirm));
+
+            // **原点は街全体の中心に固定する。** 既定ではこの取り込み範囲の中心になるため、
+            // タイルごとに取り込むと全部が原点に重なる（→ referenceGridCodes）
+            GridCodeList referenceCodes = GridCodeList.CreateFromGridCodesStr(referenceGridCodes);
+            config.ReferencePoint = referenceCodes.ExtentCenter(CoordinateZoneId);
 
             foreach (var pair in config.PackageImportConfigDict.ForEachPackagePair.ToArray())
             {
