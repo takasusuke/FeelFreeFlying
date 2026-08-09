@@ -202,31 +202,82 @@ namespace FeelFreeFlying.EditorTools
             serialized.FindProperty("seaLevel").floatValue = cityBounds.min.y - SeaLevelBelowCity;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
-            var alongZ = new Vector3(90f, 0f, 0f); // カプセルの軸をY（既定）から進行方向Zへ倒す
+            var flying = new GameObject("PoseFly");
+            flying.transform.SetParent(flyer.transform, false);
+            BuildFlyingPose(flying.transform, suit, cape);
 
-            AddPart(flyer.transform, "Torso", PrimitiveType.Capsule,
-                new Vector3(0f, 0f, 0.05f), alongZ, new Vector3(0.34f, 0.42f, 0.34f), suit);
+            var walking = new GameObject("PoseWalk");
+            walking.transform.SetParent(flyer.transform, false);
+            BuildWalkingPose(walking.transform, suit, cape);
 
-            AddPart(flyer.transform, "Head", PrimitiveType.Sphere,
-                new Vector3(0f, 0.13f, 0.5f), Vector3.zero, new Vector3(0.26f, 0.26f, 0.26f), suit);
+            FlyerPose pose = flyer.AddComponent<FlyerPose>();
+            var poseSerialized = new SerializedObject(pose);
+            poseSerialized.FindProperty("controller").objectReferenceValue = controller;
+            poseSerialized.FindProperty("flyingPose").objectReferenceValue = flying;
+            poseSerialized.FindProperty("walkingPose").objectReferenceValue = walking;
+            poseSerialized.ApplyModifiedPropertiesWithoutUndo();
 
-            AddPart(flyer.transform, "ArmLeft", PrimitiveType.Capsule,
-                new Vector3(-0.19f, 0.02f, 0.58f), alongZ, new Vector3(0.12f, 0.32f, 0.12f), suit);
-            AddPart(flyer.transform, "ArmRight", PrimitiveType.Capsule,
-                new Vector3(0.19f, 0.02f, 0.58f), alongZ, new Vector3(0.12f, 0.32f, 0.12f), suit);
-
-            AddPart(flyer.transform, "LegLeft", PrimitiveType.Capsule,
-                new Vector3(-0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
-            AddPart(flyer.transform, "LegRight", PrimitiveType.Capsule,
-                new Vector3(0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
-
-            // マント。速度感は自分の身体の一部が後ろへ流れているほうが分かりやすい。
-            // **幅と角度は控えめにする。** 大きく水平に広げると、後方から見下ろすカメラに対して
-            // 面が正対し、身体を完全に隠す（実際に一度そうなった）
-            AddPart(flyer.transform, "Cape", PrimitiveType.Cube,
-                new Vector3(0f, -0.1f, -0.6f), new Vector3(-10f, 0f, 0f), new Vector3(0.3f, 0.02f, 0.8f), cape);
+            walking.SetActive(false);
 
             return flyer;
+        }
+
+        /// <summary>腕を前に伸ばした水平の姿勢。前方は+Z。</summary>
+        private static void BuildFlyingPose(Transform parent, Material suit, Material cape)
+        {
+            var alongZ = new Vector3(90f, 0f, 0f); // カプセルの軸をY（既定）から進行方向Zへ倒す
+
+            AddPart(parent, "Torso", PrimitiveType.Capsule,
+                new Vector3(0f, 0f, 0.05f), alongZ, new Vector3(0.34f, 0.42f, 0.34f), suit);
+
+            AddPart(parent, "Head", PrimitiveType.Sphere,
+                new Vector3(0f, 0.13f, 0.5f), Vector3.zero, new Vector3(0.26f, 0.26f, 0.26f), suit);
+
+            AddPart(parent, "ArmLeft", PrimitiveType.Capsule,
+                new Vector3(-0.19f, 0.02f, 0.58f), alongZ, new Vector3(0.12f, 0.32f, 0.12f), suit);
+            AddPart(parent, "ArmRight", PrimitiveType.Capsule,
+                new Vector3(0.19f, 0.02f, 0.58f), alongZ, new Vector3(0.12f, 0.32f, 0.12f), suit);
+
+            AddPart(parent, "LegLeft", PrimitiveType.Capsule,
+                new Vector3(-0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
+            AddPart(parent, "LegRight", PrimitiveType.Capsule,
+                new Vector3(0.1f, 0f, -0.6f), alongZ, new Vector3(0.14f, 0.38f, 0.14f), suit);
+
+            // マントは**背中に乗せる**。うつ伏せなので背中は上（+Y）側で、
+            // 胴（半径0.17）より上へ出さないと身体にめり込む。肩の後ろから始めて後方へ流す。
+            // **幅は胴（0.34）より細くする。** 同じか広いと、斜め後ろからのカメラに対して
+            // 面が正対して身体を完全に隠す（3回同じ失敗をした）
+            AddPart(parent, "Cape", PrimitiveType.Cube,
+                new Vector3(0f, 0.17f, -0.52f), new Vector3(-20f, 0f, 0f),
+                new Vector3(0.24f, 0.02f, 0.9f), cape);
+        }
+
+        /// <summary>
+        /// 立っている姿勢。足元が-0.85m、頭頂が+0.85m（CharacterControllerの高さ1.7mに合わせる）。
+        /// </summary>
+        private static void BuildWalkingPose(Transform parent, Material suit, Material cape)
+        {
+            AddPart(parent, "Torso", PrimitiveType.Capsule,
+                new Vector3(0f, 0.15f, 0f), Vector3.zero, new Vector3(0.34f, 0.32f, 0.28f), suit);
+
+            AddPart(parent, "Head", PrimitiveType.Sphere,
+                new Vector3(0f, 0.66f, 0.02f), Vector3.zero, new Vector3(0.26f, 0.26f, 0.26f), suit);
+
+            AddPart(parent, "ArmLeft", PrimitiveType.Capsule,
+                new Vector3(-0.24f, 0.12f, 0f), Vector3.zero, new Vector3(0.12f, 0.28f, 0.12f), suit);
+            AddPart(parent, "ArmRight", PrimitiveType.Capsule,
+                new Vector3(0.24f, 0.12f, 0f), Vector3.zero, new Vector3(0.12f, 0.28f, 0.12f), suit);
+
+            AddPart(parent, "LegLeft", PrimitiveType.Capsule,
+                new Vector3(-0.1f, -0.45f, 0f), Vector3.zero, new Vector3(0.16f, 0.4f, 0.16f), suit);
+            AddPart(parent, "LegRight", PrimitiveType.Capsule,
+                new Vector3(0.1f, -0.45f, 0f), Vector3.zero, new Vector3(0.16f, 0.4f, 0.16f), suit);
+
+            // 立っている時のマントは背中に垂れる。胴（奥行き0.28）の外側に置き、
+            // 幅は胴（0.34）より細くして両脇から身体が見えるようにする
+            AddPart(parent, "Cape", PrimitiveType.Cube,
+                new Vector3(0f, 0.1f, -0.17f), new Vector3(4f, 0f, 0f),
+                new Vector3(0.28f, 0.66f, 0.02f), cape);
         }
 
         private static void AddPart(Transform parent, string name, PrimitiveType primitive,

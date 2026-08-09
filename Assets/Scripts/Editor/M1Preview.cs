@@ -114,6 +114,55 @@ namespace FeelFreeFlying.EditorTools
             }
         }
 
+        /// <summary>
+        /// 飛ぶ姿勢と歩く姿勢を、三人称で1枚ずつ書き出す。
+        /// **自分の姿は一人称では消しているので、確認は三人称でしかできない。**
+        /// マントが身体にめり込んでいないか等は、数字ではなく絵でしか分からない。
+        /// </summary>
+        [MenuItem("Tools/FeelFreeFlying/M1: 飛ぶ姿勢と歩く姿勢を書き出す")]
+        public static void CapturePoses()
+        {
+            EditorSceneManager.OpenScene(FlightScene, OpenSceneMode.Single);
+
+            var flyer = Object.FindFirstObjectByType<FlightController>();
+            var camera = Object.FindFirstObjectByType<FlightCamera>();
+            if (flyer == null || camera == null)
+            {
+                Debug.LogError("[M1Preview] 機体かカメラが見つかりません。");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            // 一人称のままだと身体を消してしまうので、三人称に切り替えて撮る
+            var serialized = new SerializedObject(camera);
+            serialized.FindProperty("mode").enumValueIndex = 0; // ThirdPerson
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            Transform flying = flyer.transform.Find("PoseFly");
+            Transform walking = flyer.transform.Find("PoseWalk");
+
+            Bounds city = CalculateCityBounds();
+            flyer.transform.SetPositionAndRotation(
+                new Vector3(city.center.x, PreviewAltitude, city.center.z - PreviewDistance),
+                Quaternion.Euler(-4f, 0f, 10f));
+
+            string basePath = ResolveOutputPath();
+            string directory = Path.GetDirectoryName(Path.GetFullPath(basePath));
+            string name = Path.GetFileNameWithoutExtension(basePath);
+
+            if (flying != null) flying.gameObject.SetActive(true);
+            if (walking != null) walking.gameObject.SetActive(false);
+            RenderToFile(camera, Path.Combine(directory, name + "-fly.png"));
+
+            if (flying != null) flying.gameObject.SetActive(false);
+            if (walking != null)
+            {
+                walking.gameObject.SetActive(true);
+                walking.localRotation = Quaternion.identity;
+            }
+            RenderToFile(camera, Path.Combine(directory, name + "-walk.png"));
+        }
+
         [MenuItem("Tools/FeelFreeFlying/M1: 見た目を画像に書き出す")]
         public static void Capture()
         {

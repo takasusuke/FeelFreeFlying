@@ -115,8 +115,8 @@ namespace FeelFreeFlying.Flight
         [Tooltip("飛び立つ時の初速 (m/s)")]
         [SerializeField, Min(1f)] private float launchSpeed = 16f;
 
-        [Tooltip("飛び立つ時の機首角 (度)")]
-        [SerializeField, Range(0f, 60f)] private float launchPitch = 25f;
+        [Tooltip("この角度より上を向いてダッシュすると、そのまま飛行へ移る (度)")]
+        [SerializeField, Range(5f, 80f)] private float seamlessLaunchPitch = 30f;
 
         private float pitchDegrees;
         private float rollDegrees;
@@ -383,9 +383,19 @@ namespace FeelFreeFlying.Flight
 
             // 移動は水平面のみ。視線が上を向いていても足元は水平に進む
             Vector2 move = Vector2.ClampMagnitude(state.Keys + state.LeftStick, 1f);
+
+            // **上を向いてダッシュしたらそのまま飛び立つ。** 走って屋上の縁から跳ぶ動きと、
+            // 飛行への移行が別操作だと、そこで動きが一度止まる
+            if (state.Dash && move.y > 0.3f && pitchDegrees >= seamlessLaunchPitch)
+            {
+                speed = runSpeed;
+                Launch();
+                return;
+            }
+
             Quaternion heading = Quaternion.Euler(0f, yawDegrees, 0f);
             Vector3 horizontal = heading * new Vector3(move.x, 0f, move.y) *
-                                 (state.Boost ? runSpeed : walkSpeed);
+                                 (state.Dash ? runSpeed : walkSpeed);
 
             bool jumpPressed = state.Jump && !jumpHeldLastFrame;
             jumpHeldLastFrame = state.Jump;

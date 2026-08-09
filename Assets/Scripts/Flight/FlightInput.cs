@@ -36,8 +36,11 @@ namespace FeelFreeFlying.Flight
         /// <summary>減速（○ボタン / S）。</summary>
         public bool ThrottleDown;
 
-        /// <summary>飛行ならブースト、歩行ならダッシュ。</summary>
+        /// <summary>飛行中のブースト（L1）。</summary>
         public bool Boost;
+
+        /// <summary>歩行中のダッシュ（R1）。</summary>
+        public bool Dash;
 
         /// <summary>飛行時に水平へ戻す。</summary>
         public bool LevelFlight;
@@ -166,11 +169,8 @@ namespace FeelFreeFlying.Flight
             // ×と○を加減速に使うぶん、元々そこにあったブーストと水平はショルダーへ寄せた
             if (pad.buttonSouth.isPressed) { state.ThrottleUp = true; UsingGamepad = true; }
             if (pad.buttonEast.isPressed) { state.ThrottleDown = true; UsingGamepad = true; }
-            if (pad.leftShoulder.isPressed || pad.rightShoulder.isPressed)
-            {
-                state.Boost = true; // L1: ダッシュ / ブースト（R1でも同じ）
-                UsingGamepad = true;
-            }
+            if (pad.leftShoulder.isPressed) { state.Boost = true; UsingGamepad = true; }   // L1: 飛行のブースト
+            if (pad.rightShoulder.isPressed) { state.Dash = true; UsingGamepad = true; }   // R1: 歩行のダッシュ
             if (pad.leftTrigger.ReadValue() > 0.4f) { state.Jump = true; UsingGamepad = true; }
             if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
             if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
@@ -223,7 +223,12 @@ namespace FeelFreeFlying.Flight
             if (keys.y > 0f) state.ThrottleUp = true;
             if (keys.y < 0f) state.ThrottleDown = true;
 
-            if (keyboard.leftShiftKey.isPressed) { state.Boost = true; UsingGamepad = false; }
+            if (keyboard.leftShiftKey.isPressed)
+            {
+                state.Boost = true;
+                state.Dash = true;
+                UsingGamepad = false;
+            }
             if (keyboard.spaceKey.isPressed)
             {
                 state.LevelFlight = true;
