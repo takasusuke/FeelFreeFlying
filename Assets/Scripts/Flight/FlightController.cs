@@ -57,6 +57,10 @@ namespace FeelFreeFlying.Flight
         [Tooltip("姿勢の追従の鈍さ (秒)。大きいほどふわっとするが、遅れて感じる")]
         [SerializeField, Range(0f, 0.5f)] private float attitudeSmoothing = 0.1f;
 
+        [Tooltip("最高速での旋回の効き。1で速度に関係なく同じ、小さいほど高速では曲がらない。" +
+                 "**急旋回にブレーキが要るようにするための値**")]
+        [SerializeField, Range(0.1f, 1f)] private float highSpeedTurnFactor = 0.35f;
+
         [Header("浮遊感")]
         [Tooltip("機首を下げた時に乗る加速度 (m/s^2)。0で無効")]
         [SerializeField, Range(0f, 60f)] private float diveAcceleration = 14f;
@@ -285,8 +289,14 @@ namespace FeelFreeFlying.Flight
                 if (climbInput > 0f) climbInput = 0f;
             }
 
-            yawDegrees += turnInput * lookRate * dt;
-            pitchDegrees = Mathf.Clamp(pitchDegrees + climbInput * pitchRate * dt, -pitchLimit, pitchLimit);
+            // **速いほど曲がらない。** 急旋回したければ減速する、という関係を作る。
+            // これがないと、速度は「景色の流れる速さ」でしかなくなり、
+            // ブレーキ（L2）を使う理由が着地の時だけになる
+            float agility = Mathf.Lerp(1f, highSpeedTurnFactor, SpeedRatio);
+
+            yawDegrees += turnInput * lookRate * agility * dt;
+            pitchDegrees = Mathf.Clamp(
+                pitchDegrees + climbInput * pitchRate * agility * dt, -pitchLimit, pitchLimit);
 
             // 視線追従では視点＝進路なので、カメラを別に振らない
             LookInput = followView ? Vector2.zero : state.RightStick;
