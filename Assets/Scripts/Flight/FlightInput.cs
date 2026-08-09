@@ -33,12 +33,6 @@ namespace FeelFreeFlying.Flight
         /// <summary>L2。飛行の減速（アナログ）。歩行ではジャンプ。</summary>
         public float TriggerLeft;
 
-        /// <summary>加速（×ボタン / W）。</summary>
-        public bool ThrottleUp;
-
-        /// <summary>減速（○ボタン / S）。</summary>
-        public bool ThrottleDown;
-
         /// <summary>飛行中のブースト（L1）。</summary>
         public bool Boost;
 
@@ -172,13 +166,15 @@ namespace FeelFreeFlying.Flight
                 UsingGamepad = true;
             }
 
-            // PS5の配置に合わせる。×で加速、○で減速、R1でブースト、L1で水平、L2でジャンプ。
-            // ×と○を加減速に使うぶん、元々そこにあったブーストと水平はショルダーへ寄せた
-            if (pad.buttonSouth.isPressed) { state.ThrottleUp = true; UsingGamepad = true; }
-            if (pad.buttonEast.isPressed) { state.ThrottleDown = true; UsingGamepad = true; }
+            // 加減速はR2/L2（トリガー）。**顔ボタンの加減速はやめた**——結局使われず、
+            // ジャンプが押しにくい位置へ追いやられていた
             if (pad.leftShoulder.isPressed) { state.Boost = true; UsingGamepad = true; }   // L1: 飛行のブースト
             if (pad.rightShoulder.isPressed) { state.Dash = true; UsingGamepad = true; }   // R1: 歩行のダッシュ
-            if (pad.leftTrigger.ReadValue() > 0.4f) { state.Jump = true; UsingGamepad = true; }
+
+            bool jumpPressed = FlightSettings.Jump == JumpBinding.Cross
+                ? pad.buttonSouth.isPressed
+                : pad.leftTrigger.ReadValue() > 0.4f;
+            if (jumpPressed) { state.Jump = true; UsingGamepad = true; }
             if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
             if (pad.rightStickButton.wasPressedThisFrame) { state.RecenterView = true; UsingGamepad = true; }
             if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
@@ -227,9 +223,6 @@ namespace FeelFreeFlying.Flight
             state.Arrows = arrows;
 
             if (keys.sqrMagnitude > 0f || arrows.sqrMagnitude > 0f) UsingGamepad = false;
-
-            if (keys.y > 0f) state.ThrottleUp = true;
-            if (keys.y < 0f) state.ThrottleDown = true;
 
             if (keyboard.leftShiftKey.isPressed)
             {

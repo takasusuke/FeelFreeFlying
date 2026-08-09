@@ -30,6 +30,9 @@ namespace FeelFreeFlying.Flight
 
         private bool started;
 
+        /// <summary>開始済みか。設定画面が「閉じた後に操作を始めてよいか」を判断するのに使う。</summary>
+        public bool Started => started;
+
         private void Awake()
         {
             if (controller == null) controller = FindFirstObjectByType<FlightController>();
@@ -87,6 +90,8 @@ namespace FeelFreeFlying.Flight
                 ? "OPTIONS または × ボタンで開始"
                 : "Enter / Space / クリックで開始";
             GUI.Label(new Rect(0f, Screen.height * 0.62f, Screen.width, 40f), prompt, promptStyle);
+            GUI.Label(new Rect(0f, Screen.height * 0.68f, Screen.width, 30f),
+                Gamepad.current != null ? "OPTIONS で操作設定" : "Tab で操作設定", creditStyle);
 
             // 出典表示。**外さない**（CLAUDE.md 不変条件5）
             var credits = new Rect(0f, Screen.height - 78f, Screen.width, 70f);

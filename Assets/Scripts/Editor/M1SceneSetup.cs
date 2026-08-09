@@ -81,6 +81,18 @@ namespace FeelFreeFlying.EditorTools
             titleSerialized.FindProperty("hud").objectReferenceValue = hudComponent;
             titleSerialized.ApplyModifiedPropertiesWithoutUndo();
 
+            // 操作設定。**操作方式を試遊中に切り替えられないと比較にならない**（→ m1-plan.md §2）
+            var settings = new GameObject("SettingsScreen");
+            SettingsScreen settingsScreen = settings.AddComponent<SettingsScreen>();
+
+            var settingsSerialized = new SerializedObject(settingsScreen);
+            settingsSerialized.FindProperty("controller").objectReferenceValue =
+                craft.GetComponent<FlightController>();
+            settingsSerialized.FindProperty("input").objectReferenceValue = craft.GetComponent<FlightInput>();
+            settingsSerialized.FindProperty("hud").objectReferenceValue = hudComponent;
+            settingsSerialized.FindProperty("title").objectReferenceValue = titleScreen;
+            settingsSerialized.ApplyModifiedPropertiesWithoutUndo();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, FlightScene);
             AddSceneToBuildSettings(FlightScene);

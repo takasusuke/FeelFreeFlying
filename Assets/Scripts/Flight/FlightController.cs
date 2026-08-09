@@ -43,9 +43,6 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Range(1f, 3f)] private float boostMultiplier = 1.7f;
 
         [Header("姿勢")]
-        [Tooltip("上下を反転する。**マウス・スティックのみ**に効く（矢印キーは常に↑で機首上げ）")]
-        [SerializeField] private bool invertPitch = true;
-
         [Tooltip("機首上下の角速度 (度/秒)")]
         [SerializeField, Min(1f)] private float pitchRate = 55f;
 
@@ -128,6 +125,9 @@ namespace FeelFreeFlying.Flight
         [Tooltip("空中で進行方向を変えられる速さ (m/s^2)。**小さいほど慣性が強い**")]
         [SerializeField, Min(1f)] private float airAcceleration = 22f;
 
+        [Tooltip("視線追従の時、横移動が進路を曲げる強さ")]
+        [SerializeField, Range(0f, 2f)] private float StrafeInfluence = 0.7f;
+
         private float pitchDegrees;
         private float rollDegrees;
         private float yawDegrees;
@@ -160,6 +160,12 @@ namespace FeelFreeFlying.Flight
         /// <summary>視点を動かす入力（右スティック）。カメラが読む。**進路には影響しない。**</summary>
         public Vector2 LookInput { get; private set; }
 
+        /// <summary>横移動の入力。視線追従の時だけ使う（左スティックの左右）。</summary>
+        private float StrafeInput { get; set; }
+
+        /// <summary>左スティックの上下による加減速。視線追従の時だけ使う。</summary>
+        private float ThrottleFromStick { get; set; }
+
         /// <summary>視点を進行方向へ戻す指示があったか。カメラが読んで消費する。</summary>
         public bool ConsumeRecenterView()
         {
@@ -169,7 +175,7 @@ namespace FeelFreeFlying.Flight
         }
         public MotionMode Mode { get; private set; } = MotionMode.Flying;
         public bool IsWalking => Mode == MotionMode.Walking;
-        public bool InvertPitch => invertPitch;
+        public bool InvertPitch => FlightSettings.InvertPitch;
 
         /// <summary>着地に失敗した等、HUDに1行出したいときのメッセージ。</summary>
         public string Notice { get; private set; }
@@ -195,8 +201,8 @@ namespace FeelFreeFlying.Flight
             if (state.RecenterView) recenterViewRequested = true;
             if (state.ToggleInvert)
             {
-                invertPitch = !invertPitch;
-                ShowNotice(invertPitch ? "上下反転: あり" : "上下反転: なし");
+                FlightSettings.InvertPitch = !FlightSettings.InvertPitch;
+                ShowNotice(FlightSettings.InvertPitch ? "上下反転: あり" : "上下反転: なし");
             }
 
             if (state.ToggleCollision)
@@ -240,10 +246,18 @@ namespace FeelFreeFlying.Flight
         /// </summary>
         private void UpdateAttitude(FlightInputState state, float dt)
         {
+            bool followView = FlightSettings.Steering == SteeringMode.FollowView;
+
+            // 視線追従（スパイダーマン式）では右スティックが進路そのものになる。
+            // 独立視点では左スティックが進路で、右スティックは視点だけ動かす
+            Vector2 steer = followView ? state.RightStick : state.LeftStick;
+            StrafeInput = followView ? Mathf.Clamp(state.LeftStick.x + state.Keys.x, -1f, 1f) : 0f;
+            ThrottleFromStick = followView ? state.LeftStick.y : 0f;
+
             // 反転の対象はマウスとスティックだけ（矢印キーは常に↑で上向き）
-            float turnInput = Mathf.Clamp(state.Aim.x + state.LeftStick.x + state.Keys.x, -1f, 1f);
+            float turnInput = Mathf.Clamp(state.Aim.x + steer.x + (followView ? 0f : state.Keys.x), -1f, 1f);
             float climbInput = Mathf.Clamp(
-                (state.Aim.y + state.LeftStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y, -1f, 1f);
+                (state.Aim.y + steer.y) * (FlightSettings.InvertPitch ? 1f : -1f) + state.Arrows.y, -1f, 1f);
 
             // 飛び立った直後だけ、上向きの入力を無視する（走り出しの前傾がそのまま上昇に化けるため）
             if (climbLockRemaining > 0f)
@@ -255,7 +269,8 @@ namespace FeelFreeFlying.Flight
             yawDegrees += turnInput * lookRate * dt;
             pitchDegrees = Mathf.Clamp(pitchDegrees + climbInput * pitchRate * dt, -pitchLimit, pitchLimit);
 
-            LookInput = state.RightStick;
+            // 視線追従では視点＝進路なので、カメラを別に振らない
+            LookInput = followView ? Vector2.zero : state.RightStick;
 
             if (state.LevelFlight)
             {
@@ -285,9 +300,7 @@ namespace FeelFreeFlying.Flight
         {
             IsBoosting = state.Boost;
 
-            float throttleInput = state.Trigger - state.TriggerLeft + state.Keys.y;
-            if (state.ThrottleUp) throttleInput += 1f;
-            if (state.ThrottleDown) throttleInput -= 1f;
+            float throttleInput = state.Trigger - state.TriggerLeft + state.Keys.y + ThrottleFromStick;
 
             speed += Mathf.Clamp(throttleInput, -1f, 1f) * throttleAcceleration * dt;
 
@@ -304,7 +317,9 @@ namespace FeelFreeFlying.Flight
 
         private void MoveFlying(float dt)
         {
-            Vector3 delta = transform.forward * (EffectiveSpeed * dt);
+            // 視線追従では左スティックの左右で進路を横へずらす（旋回は右スティック側）
+            Vector3 direction = transform.forward + transform.right * (StrafeInput * StrafeInfluence);
+            Vector3 delta = direction.normalized * (EffectiveSpeed * dt);
 
             if (collideWhileFlying && body != null)
             {
@@ -448,7 +463,7 @@ namespace FeelFreeFlying.Flight
         {
             // 視線。マウス（または右スティック）で回し、身体は水平のまま
             float lookX = state.Aim.x + state.RightStick.x;
-            float lookY = (state.Aim.y + state.RightStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y;
+            float lookY = (state.Aim.y + state.RightStick.y) * (FlightSettings.InvertPitch ? 1f : -1f) + state.Arrows.y;
             LookInput = Vector2.zero; // 歩行中は視点がそのまま身体の向きなので、別に持たない
 
             yawDegrees += lookX * lookRate * dt;
