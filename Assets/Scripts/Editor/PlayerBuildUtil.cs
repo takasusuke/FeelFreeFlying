@@ -35,9 +35,9 @@ namespace FeelFreeFlying.EditorTools
             // 既定はオフ。オフのままだとウィンドウが非フォーカスの間フレームが進まない
             PlayerSettings.runInBackground = true;
 
-            // `PlayerSettings.bakeCollisionMeshes`は**入れない**。
-            // タイル読み込みの引っかかりの原因かと思って試したが、1% lowは50.7→46.7で
-            // 誤差の範囲、ビルドは+63MBだった（→ docs/m2-plan.md §6.3）
+            // `PlayerSettings.bakeCollisionMeshes`は**今は入れない**。判断保留の理由は
+            // docs/m2-plan.md §6.2（総読み込み時間は約4割縮むが、最悪フレームが悪化して見えた。
+            // ただしその計測は隣のリポジトリのUnityが動いている最中で、条件が揃っていない）
 
             var options = new BuildPlayerOptions
             {
