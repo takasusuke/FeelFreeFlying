@@ -51,54 +51,81 @@ namespace FeelFreeFlying.EditorTools
         private const int CoordinateZoneId = 9;
 
         /// <summary>建築物のLOD。LOD0は底面ポリゴンで箱にならない（→ §3）。</summary>
-        private const int BuildingLod = 1;
+        private const int DefaultBuildingLod = 1;
 
         private const string ScenePath = "Assets/Scenes/M0Benchmark.unity";
         private const string GranularityArg = "-ffimport-granularity";
+        private const string LodArg = "-ffimport-lod";
+        private const string TextureArg = "-ffimport-texture";
 
         [MenuItem("Tools/FeelFreeFlying/M0: 新宿を取り込む（主要地物単位）")]
         public static void ImportPerPrimaryFeature() =>
-            Run(MeshGranularity.PerPrimaryFeatureObject, exitWhenDone: false);
+            Run(MeshGranularity.PerPrimaryFeatureObject, DefaultBuildingLod, false, exitWhenDone: false);
 
         [MenuItem("Tools/FeelFreeFlying/M0: 新宿を取り込む（地域単位）")]
         public static void ImportPerCityModelArea() =>
-            Run(MeshGranularity.PerCityModelArea, exitWhenDone: false);
+            Run(MeshGranularity.PerCityModelArea, DefaultBuildingLod, false, exitWhenDone: false);
+
+        [MenuItem("Tools/FeelFreeFlying/M1: 新宿を取り込む（LOD2・実写テクスチャ）")]
+        public static void ImportTexturedLod2() =>
+            Run(MeshGranularity.PerCityModelArea, 2, true, exitWhenDone: false);
 
         /// <summary>バッチモードからの入口。</summary>
         public static void ImportFromCommandLine()
         {
             MeshGranularity granularity = MeshGranularity.PerPrimaryFeatureObject;
+            int lod = DefaultBuildingLod;
+            bool includeTexture = false;
 
             string[] args = Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
             {
-                if (args[i] != GranularityArg) continue;
-                switch (args[i + 1])
+                switch (args[i])
                 {
-                    case "area":
-                        granularity = MeshGranularity.PerCityModelArea;
+                    case GranularityArg:
+                        switch (args[i + 1])
+                        {
+                            case "area":
+                                granularity = MeshGranularity.PerCityModelArea;
+                                break;
+                            case "primary":
+                                granularity = MeshGranularity.PerPrimaryFeatureObject;
+                                break;
+                            default:
+                                Debug.LogError(
+                                    $"[M0Import] {GranularityArg} は area か primary。受け取った値: {args[i + 1]}");
+                                EditorApplication.Exit(1);
+                                return;
+                        }
                         break;
-                    case "primary":
-                        granularity = MeshGranularity.PerPrimaryFeatureObject;
+
+                    case LodArg:
+                        if (!int.TryParse(args[i + 1], out lod))
+                        {
+                            Debug.LogError($"[M0Import] {LodArg} は数値。受け取った値: {args[i + 1]}");
+                            EditorApplication.Exit(1);
+                            return;
+                        }
                         break;
-                    default:
-                        Debug.LogError($"[M0Import] {GranularityArg} は area か primary。受け取った値: {args[i + 1]}");
-                        EditorApplication.Exit(1);
-                        return;
+
+                    case TextureArg:
+                        includeTexture = args[i + 1] == "on";
+                        break;
                 }
             }
 
-            Run(granularity, exitWhenDone: true);
+            Run(granularity, lod, includeTexture, exitWhenDone: true);
         }
 
-        private static void Run(MeshGranularity granularity, bool exitWhenDone)
+        private static void Run(MeshGranularity granularity, int lod, bool includeTexture, bool exitWhenDone)
         {
             // 非同期の完了を待たずに戻る。バッチモードでは -quit を付けずに実行し、
             // 完了時にこちらから終了する（メインスレッドを止めると続きが動かないため）。
-            _ = RunAsync(granularity, exitWhenDone);
+            _ = RunAsync(granularity, lod, includeTexture, exitWhenDone);
         }
 
-        private static async Task RunAsync(MeshGranularity granularity, bool exitWhenDone)
+        private static async Task RunAsync(MeshGranularity granularity, int lod, bool includeTexture,
+            bool exitWhenDone)
         {
             try
             {
@@ -114,8 +141,10 @@ namespace FeelFreeFlying.EditorTools
                 int removed = RemoveExistingCityModels();
                 if (removed > 0) Debug.Log($"[M0Import] 既存の都市モデルを削除: {removed} 件");
 
-                CityImportConfig config = BuildConfig(datasetFullPath, granularity);
-                Debug.Log($"[M0Import] 開始: 粒度={granularity} / メッシュコード={string.Join(",", GridCodes)}");
+                CityImportConfig config = BuildConfig(datasetFullPath, granularity, lod, includeTexture);
+                Debug.Log(
+                    $"[M0Import] 開始: 粒度={granularity} / LOD={lod} / テクスチャ={(includeTexture ? "あり" : "なし")} / " +
+                    $"メッシュコード={string.Join(",", GridCodes)}");
 
                 await CityImporter.ImportAsync(config, null, null);
 
@@ -160,7 +189,8 @@ namespace FeelFreeFlying.EditorTools
             return models.Length;
         }
 
-        private static CityImportConfig BuildConfig(string datasetFullPath, MeshGranularity granularity)
+        private static CityImportConfig BuildConfig(string datasetFullPath, MeshGranularity granularity,
+            int buildingLod, bool includeTexture)
         {
             var datasetConfig = new DatasetSourceConfigLocal(datasetFullPath);
             GridCodeList gridCodes = GridCodeList.CreateFromGridCodesStr(GridCodes);
@@ -184,8 +214,8 @@ namespace FeelFreeFlying.EditorTools
                 if (!packageConfig.ImportPackage) continue;
 
                 packageConfig.MeshGranularity = granularity;
-                packageConfig.IncludeTexture = false;      // LOD1にテクスチャは無い。写実を目指さない（requirements.md §5）
-                packageConfig.EnableTexturePacking = false;
+                packageConfig.IncludeTexture = includeTexture;
+                packageConfig.EnableTexturePacking = includeTexture;
                 packageConfig.DoSetMeshCollider = false;   // 飛ぶだけなので不要
                 packageConfig.DoSetAttrInfo = false;       // **オンにするとインポートが壊れる（→ §3.1）**
 
@@ -193,7 +223,13 @@ namespace FeelFreeFlying.EditorTools
 
                 // 土地起伏はLOD0しか無いので、LODを固定するのは建築物だけ
                 int available = packageConfig.LODRange.AvailableMaxLOD;
-                int lod = Mathf.Clamp(BuildingLod, 0, Mathf.Max(available, 0));
+                int lod = Mathf.Clamp(buildingLod, 0, Mathf.Max(available, 0));
+                if (lod != buildingLod)
+                {
+                    Debug.LogWarning(
+                        $"[M0Import] LOD{buildingLod}は{package}に存在しません。LOD{lod}で取り込みます" +
+                        $"（このデータの最大LOD={available}）。");
+                }
                 packageConfig.LODRange = new LODRange(lod, lod, available);
             }
 
