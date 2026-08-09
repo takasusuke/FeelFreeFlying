@@ -31,7 +31,7 @@ namespace FeelFreeFlying.Flight
         [Tooltip("スロットルを絞りきった時の速度。**0にしない**。止まると浮遊感が消える")]
         [SerializeField, Min(0.5f)] private float speedMin = 6f;
 
-        [SerializeField, Min(1f)] private float speedMax = 85f;
+        [SerializeField, Min(1f)] private float speedMax = 150f;
 
         [Tooltip("開始時および姿勢リセット時の速度")]
         [SerializeField, Min(1f)] private float speedStart = 22f;
@@ -61,8 +61,12 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Range(0f, 0.5f)] private float attitudeSmoothing = 0.1f;
 
         [Header("浮遊感")]
-        [Tooltip("機首を下げた時に乗る加速度 (m/s^2)。上げた時は同じだけ減速する。0で無効")]
+        [Tooltip("機首を下げた時に乗る加速度 (m/s^2)。0で無効")]
         [SerializeField, Range(0f, 60f)] private float diveAcceleration = 14f;
+
+        [Tooltip("上昇中に削がれる減速度 (m/s^2)。**既定は0。** " +
+                 "入れると上昇しながら加速を止めた時に速度が落ち続け、「離した速度を保つ」が成立しない")]
+        [SerializeField, Range(0f, 60f)] private float climbDeceleration = 0f;
 
         [Header("高度")]
         [Tooltip("海面の高さ。シーン生成時に街の最下点から決めて入れる（M1SceneSetup）")]
@@ -115,6 +119,12 @@ namespace FeelFreeFlying.Flight
         [Tooltip("この角度より上を向いてダッシュすると、そのまま飛行へ移る (度)")]
         [SerializeField, Range(5f, 80f)] private float seamlessLaunchPitch = 30f;
 
+        [Tooltip("飛び立った直後に上向き入力を捨てる時間 (秒)")]
+        [SerializeField, Range(0f, 3f)] private float climbLockSeconds = 0.8f;
+
+        [Tooltip("落下中に左スティックで動ける割合。1で地上と同じ")]
+        [SerializeField, Range(0f, 1f)] private float airControl = 0.85f;
+
         private float pitchDegrees;
         private float rollDegrees;
         private float yawDegrees;
@@ -124,6 +134,8 @@ namespace FeelFreeFlying.Flight
         private float wallRunRemaining;
         private bool jumpHeldLastFrame;
         private bool recenterViewRequested;
+        private float climbLockRemaining;
+        private Vector3 lastHitNormal;
 
         private Vector3 startPosition;
         private float startYaw;
@@ -229,6 +241,13 @@ namespace FeelFreeFlying.Flight
             float climbInput = Mathf.Clamp(
                 (state.Aim.y + state.LeftStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y, -1f, 1f);
 
+            // 飛び立った直後だけ、上向きの入力を無視する（走り出しの前傾がそのまま上昇に化けるため）
+            if (climbLockRemaining > 0f)
+            {
+                climbLockRemaining -= dt;
+                if (climbInput > 0f) climbInput = 0f;
+            }
+
             yawDegrees += turnInput * lookRate * dt;
             pitchDegrees = Mathf.Clamp(pitchDegrees + climbInput * pitchRate * dt, -pitchLimit, pitchLimit);
 
@@ -262,15 +281,16 @@ namespace FeelFreeFlying.Flight
         {
             IsBoosting = state.Boost;
 
-            // 左スティックの上下も加減速に使う（歩行の前後と同じ感覚で速さを決められるように）
-            float throttleInput = state.Trigger + state.LeftStick.y + state.Keys.y;
+            float throttleInput = state.Trigger - state.TriggerLeft + state.Keys.y;
             if (state.ThrottleUp) throttleInput += 1f;
             if (state.ThrottleDown) throttleInput -= 1f;
 
             speed += Mathf.Clamp(throttleInput, -1f, 1f) * throttleAcceleration * dt;
 
-            // 降下で速度が乗り、上昇で削がれる。位置エネルギーの交換のつもりで、力学ではない
-            speed += Mathf.Sin(-pitchDegrees * Mathf.Deg2Rad) * diveAcceleration * dt;
+            // 降下で速度が乗る。上昇では**削がない**のが既定——加速を止めたら
+            // その速度を保つ、が守れなくなるため（climbDecelerationで戻せる）
+            float slope = Mathf.Sin(-pitchDegrees * Mathf.Deg2Rad);
+            speed += slope * (slope > 0f ? diveAcceleration : climbDeceleration) * dt;
 
             speed = Mathf.Clamp(speed, speedMin, speedMax);
         }
@@ -285,13 +305,10 @@ namespace FeelFreeFlying.Flight
             if (collideWhileFlying && body != null)
             {
                 if (!body.enabled) body.enabled = true;
+                lastHitNormal = Vector3.zero;
                 body.Move(delta);
 
-                // 当たっても止めない。掠めて速度が落ちる程度にする
-                if (body.collisionFlags != CollisionFlags.None)
-                {
-                    speed = Mathf.Max(speedMin, speed * grazeSpeedFactor);
-                }
+                if (body.collisionFlags != CollisionFlags.None) HandleGraze(dt);
             }
             else
             {
@@ -301,6 +318,39 @@ namespace FeelFreeFlying.Flight
 
             ClampAltitude(dt);
         }
+
+        /// <summary>
+        /// 壁に当たった時の処理。**浅く掠めたなら、少し減速して壁沿いに流す。**
+        ///
+        /// 当たり方に関係なく一律で減速すると、ビルを掠めただけで最低速度まで落ちてしまい、
+        /// 街の間を縫って飛ぶことが罰になる。正面衝突（法線と真っ向）だけ強く落とす。
+        /// 進路も壁面に沿わせる——機首が壁を向いたままだと、擦りながら止まり続ける。
+        /// </summary>
+        private void HandleGraze(float dt)
+        {
+            if (lastHitNormal == Vector3.zero)
+            {
+                speed = Mathf.Max(speedMin, speed * grazeSpeedFactor);
+                return;
+            }
+
+            // 0 = 平行に掠めた、1 = 正面から突っ込んだ
+            float headOn = Mathf.Clamp01(Vector3.Dot(transform.forward, -lastHitNormal));
+
+            float damping = Mathf.Lerp(1f, grazeSpeedFactor, headOn);
+            speed = Mathf.Max(speedMin, speed * Mathf.Pow(damping, dt * 60f));
+
+            // 壁面へ投影した向きへ機首を寄せる
+            Vector3 along = Vector3.ProjectOnPlane(transform.forward, lastHitNormal);
+            if (along.sqrMagnitude < 0.0001f) return;
+
+            along.Normalize();
+            yawDegrees = Mathf.Atan2(along.x, along.z) * Mathf.Rad2Deg;
+            pitchDegrees = Mathf.Clamp(Mathf.Asin(along.y) * Mathf.Rad2Deg, -pitchLimit, pitchLimit);
+        }
+
+        /// <summary>当たった面の向きを覚えておく。<see cref="HandleGraze"/>が使う。</summary>
+        private void OnControllerColliderHit(ControllerColliderHit hit) => lastHitNormal = hit.normal;
 
         /// <summary>海に沈まない・上がりすぎない。地面や建物は当たり判定に任せる。</summary>
         private void ClampAltitude(float dt)
@@ -373,6 +423,10 @@ namespace FeelFreeFlying.Flight
             speed = Mathf.Max(launchSpeed, speed);
             verticalVelocity = 0f;
 
+            // **飛び立った直後は上入力を捨てる。** 走り出す時はたいてい左スティックを
+            // 前に倒しているので、そのまま飛行に移ると意図せず上昇し続けてしまう
+            climbLockRemaining = climbLockSeconds;
+
             input?.ClearAim();
             ShowNotice("飛び立った");
         }
@@ -399,16 +453,26 @@ namespace FeelFreeFlying.Flight
             if (state.Dash && (falling || (move.y > 0.3f && pitchDegrees >= seamlessLaunchPitch)))
             {
                 speed = Mathf.Max(runSpeed, speed);
+
+                // **スティックを倒している方向へ飛び出す。** 後ろ向きに走っている時に
+                // 視線（＝背後）へ飛んでいくと、走っていた向きと逆に射出される
+                if (move.sqrMagnitude > 0.01f)
+                {
+                    yawDegrees += Mathf.Atan2(move.x, move.y) * Mathf.Rad2Deg;
+                }
+
                 Launch();
                 return;
             }
 
             Quaternion heading = Quaternion.Euler(0f, yawDegrees, 0f);
-            Vector3 horizontal = heading * new Vector3(move.x, 0f, move.y) *
-                                 (state.Dash ? runSpeed : walkSpeed);
+            float moveSpeed = state.Dash ? runSpeed : walkSpeed;
+            if (falling) moveSpeed *= airControl; // 落下中も左スティックで動ける
+            Vector3 horizontal = heading * new Vector3(move.x, 0f, move.y) * moveSpeed;
 
-            bool jumpPressed = state.Jump && !jumpHeldLastFrame;
-            jumpHeldLastFrame = state.Jump;
+            bool jumpHeld = state.Jump || state.TriggerLeft > 0.4f;
+            bool jumpPressed = jumpHeld && !jumpHeldLastFrame;
+            jumpHeldLastFrame = jumpHeld;
 
             if (body.isGrounded)
             {
@@ -417,7 +481,7 @@ namespace FeelFreeFlying.Flight
                 wallRunRemaining = wallRunSeconds;
                 if (jumpPressed) verticalVelocity = jumpSpeed;
             }
-            else if (CanWallRun(state, jumpHeldLastFrame))
+            else if (CanWallRun(state, jumpHeld))
             {
                 // 壁走り。壁に触れながらジャンプを押し続けている間だけ上がる
                 verticalVelocity = wallRunSpeed;

@@ -27,8 +27,11 @@ namespace FeelFreeFlying.Flight
         /// <summary>矢印キー。y=↑↓（機首を明示的に上下させる）。</summary>
         public Vector2 Arrows;
 
-        /// <summary>R2 - L2。飛行のアナログなスロットル。</summary>
+        /// <summary>R2。飛行の加速（アナログ）。</summary>
         public float Trigger;
+
+        /// <summary>L2。飛行の減速（アナログ）。歩行ではジャンプ。</summary>
+        public float TriggerLeft;
 
         /// <summary>加速（×ボタン / W）。</summary>
         public bool ThrottleUp;
@@ -159,8 +162,9 @@ namespace FeelFreeFlying.Flight
             state.LeftStick = ApplyDeadZone(pad.leftStick.ReadValue());
             state.RightStick = ApplyDeadZone(pad.rightStick.ReadValue());
 
-            // L2はジャンプに使うので、アナログのスロットルはR2だけにする
+            // R2で加速、L2で減速。L2は歩行中だけジャンプを兼ねる
             state.Trigger = pad.rightTrigger.ReadValue();
+            state.TriggerLeft = pad.leftTrigger.ReadValue();
 
             if (state.LeftStick.sqrMagnitude > 0f || state.RightStick.sqrMagnitude > 0f ||
                 Mathf.Abs(state.Trigger) > 0.01f)

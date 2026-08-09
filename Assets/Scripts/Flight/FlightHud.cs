@@ -183,7 +183,7 @@ namespace FeelFreeFlying.Flight
             else
             {
                 hints = pad
-                    ? $"左スティック: 進む方向（左右で旋回・上下で昇降） / 右スティック: 視点だけ動かす（R3で正面に戻す） / {confirm}: 加速 / {cancel}: 減速 / L1: ブースト / L3: 水平 / {square}: 着地 / {triangle}: 視点切替"
+                    ? $"左スティック: 進む方向（左右で旋回・上下で昇降） / 右スティック: 視点だけ動かす（R3で正面に戻す） / {confirm}・R2: 加速 / {cancel}・L2: 減速 / L1: ブースト / L3: 水平 / {square}: 着地 / {triangle}: 視点切替"
                     : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / F: 着地 / C: 視点 / I: 上下反転 / K: 当たり判定 / R: やり直す / Esc: カーソルを返す";
             }
 
