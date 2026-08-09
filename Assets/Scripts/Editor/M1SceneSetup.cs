@@ -195,7 +195,12 @@ namespace FeelFreeFlying.EditorTools
             walker.slopeLimit = 50f;
             walker.stepOffset = 0.4f;
 
-            flyer.AddComponent<FlightController>();
+            FlightController controller = flyer.AddComponent<FlightController>();
+
+            // 海面の高さを渡す。飛行の下限と「海に落ちたら飛行へ戻す」判定がこれを基準にする
+            var serialized = new SerializedObject(controller);
+            serialized.FindProperty("seaLevel").floatValue = cityBounds.min.y - SeaLevelBelowCity;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
 
             var alongZ = new Vector3(90f, 0f, 0f); // カプセルの軸をY（既定）から進行方向Zへ倒す
 

@@ -170,7 +170,7 @@ namespace FeelFreeFlying.Flight
             {
                 hints = pad
                     ? "左スティック: 傾ける / トリガー: 加減速 / A: ブースト / B: 水平 / X: 着地 / Y: 視点 / 十字上: 上下反転 / SELECT: やり直す"
-                    : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / Space: 水平 / F: 着地 / C: 視点 / I: 上下反転 / R: やり直す / Esc: カーソルを返す";
+                    : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / F: 着地 / C: 視点 / I: 上下反転 / K: 当たり判定 / R: やり直す / Esc: カーソルを返す";
             }
 
             if (input != null && !input.CursorCaptured)

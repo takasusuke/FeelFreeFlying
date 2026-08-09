@@ -44,6 +44,9 @@ namespace FeelFreeFlying.Flight
 
         /// <summary>上下の反転を切り替える。</summary>
         public bool ToggleInvert;
+
+        /// <summary>飛行中の当たり判定を切り替える。</summary>
+        public bool ToggleCollision;
     }
 
     /// <summary>
@@ -118,6 +121,7 @@ namespace FeelFreeFlying.Flight
             if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
             if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }
             if (pad.dpad.up.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = true; }
+            if (pad.dpad.down.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = true; }
         }
 
         private void ReadKeyboardAndMouse(ref FlightInputState state)
@@ -165,6 +169,7 @@ namespace FeelFreeFlying.Flight
             if (keyboard.fKey.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = false; }
             if (keyboard.cKey.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = false; }
             if (keyboard.iKey.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = false; }
+            if (keyboard.kKey.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = false; }
 
             if (keyboard.rKey.wasPressedThisFrame)
             {

@@ -69,6 +69,51 @@ namespace FeelFreeFlying.EditorTools
             RenderToFile(camera, ResolveOutputPath());
         }
 
+        /// <summary>
+        /// 街の何点かで真下を調べ、**どこに降りられるか**を一覧で出す。
+        /// 「屋上には降りられるが地面には降りられない」といった取りこぼしは、
+        /// 飛んで試すより一覧で見たほうが早く分かる。
+        /// </summary>
+        [MenuItem("Tools/FeelFreeFlying/M1: 着地できる場所を調べる")]
+        public static void ProbeLandingSpots()
+        {
+            EditorSceneManager.OpenScene(FlightScene, OpenSceneMode.Single);
+            Bounds city = CalculateCityBounds();
+
+            foreach (MeshCollider collider in Object.FindObjectsByType<MeshCollider>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                Bounds b = collider.bounds;
+                Debug.Log($"[M1Preview] コライダー: {collider.name} " +
+                          $"（{b.size.x:F0} x {b.size.z:F0} m / 高さ {b.min.y:F0}〜{b.max.y:F0} m）");
+            }
+
+            var offsets = new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(0.25f, 0.25f),
+                new Vector2(-0.25f, 0.25f),
+                new Vector2(0.25f, -0.25f),
+                new Vector2(-0.25f, -0.25f),
+                new Vector2(0.45f, 0f),
+                new Vector2(0f, -0.45f),
+            };
+
+            foreach (Vector2 offset in offsets)
+            {
+                var origin = new Vector3(
+                    city.center.x + city.size.x * offset.x,
+                    city.max.y + 50f,
+                    city.center.z + city.size.z * offset.y);
+
+                string result = Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 2000f)
+                    ? $"{hit.collider.name} 高度 {hit.point.y:F1} m"
+                    : "**当たり判定なし（着地できない）**";
+
+                Debug.Log($"[M1Preview] ({origin.x:F0}, {origin.z:F0}) → {result}");
+            }
+        }
+
         [MenuItem("Tools/FeelFreeFlying/M1: 見た目を画像に書き出す")]
         public static void Capture()
         {

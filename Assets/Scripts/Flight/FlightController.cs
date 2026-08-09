@@ -70,10 +70,22 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Range(0f, 60f)] private float diveAcceleration = 14f;
 
         [Header("高度")]
-        [Tooltip("これ以下に降りられない。**地面と衝突させない**（飛行中はコライダーを持たないため）")]
-        [SerializeField] private float altitudeMin = 12f;
+        [Tooltip("海面の高さ。シーン生成時に街の最下点から決めて入れる（M1SceneSetup）")]
+        [SerializeField] private float seaLevel = 0f;
+
+        [Tooltip("海面からこれ以上は下がれない。**海に沈まないための最後の受け皿**")]
+        [SerializeField, Min(0f)] private float altitudeAboveSeaMin = 3f;
 
         [SerializeField] private float altitudeMax = 2000f;
+
+        [Header("当たり判定")]
+        [Tooltip("飛行中も建物にぶつかる。**負荷はほぼ無い**（コライダーは地域単位で9個、" +
+                 "判定はカプセル1個ぶん）。問題は負荷ではなく、ぶつかった時の気持ちよさ")]
+        [SerializeField] private bool collideWhileFlying = true;
+
+        [Tooltip("接触した時に速度に掛ける係数。1で減速しない。**止めない**——" +
+                 "急停止は墜落と同じ体験になる（CLAUDE.md 不変条件3）")]
+        [SerializeField, Range(0.1f, 1f)] private float grazeSpeedFactor = 0.6f;
 
         [Header("歩行")]
         [Tooltip("着地できる高さの上限 (m)。真下にこれ以内で足場があれば降りられる")]
@@ -126,7 +138,7 @@ namespace FeelFreeFlying.Flight
         {
             if (input == null) input = GetComponent<FlightInput>();
             body = GetComponent<CharacterController>();
-            if (body != null) body.enabled = false; // 飛行中は当たり判定を持たない
+            if (body != null) body.enabled = collideWhileFlying;
 
             startPosition = transform.position;
             startYaw = transform.eulerAngles.y;
@@ -143,6 +155,12 @@ namespace FeelFreeFlying.Flight
             {
                 invertPitch = !invertPitch;
                 ShowNotice(invertPitch ? "上下反転: あり" : "上下反転: なし");
+            }
+
+            if (state.ToggleCollision)
+            {
+                collideWhileFlying = !collideWhileFlying;
+                ShowNotice(collideWhileFlying ? "飛行中の当たり判定: あり" : "飛行中の当たり判定: なし（すり抜け）");
             }
 
             if (state.Reset)
@@ -229,16 +247,41 @@ namespace FeelFreeFlying.Flight
 
         private void MoveFlying(float dt)
         {
-            Vector3 position = transform.position + transform.forward * (speed * dt);
+            Vector3 delta = transform.forward * (speed * dt);
 
-            // 飛行中はコライダーを持たないので、下限で受け止める
-            if (position.y < altitudeMin)
+            if (collideWhileFlying && body != null)
             {
-                position.y = altitudeMin;
+                if (!body.enabled) body.enabled = true;
+                body.Move(delta);
+
+                // 当たっても止めない。掠めて速度が落ちる程度にする
+                if (body.collisionFlags != CollisionFlags.None)
+                {
+                    speed = Mathf.Max(speedMin, speed * grazeSpeedFactor);
+                }
+            }
+            else
+            {
+                if (body != null && body.enabled) body.enabled = false;
+                transform.position += delta;
+            }
+
+            ClampAltitude(dt);
+        }
+
+        /// <summary>海に沈まない・上がりすぎない。地面や建物は当たり判定に任せる。</summary>
+        private void ClampAltitude(float dt)
+        {
+            Vector3 position = transform.position;
+            float floor = seaLevel + altitudeAboveSeaMin;
+
+            if (position.y < floor)
+            {
+                position.y = floor;
                 if (pitchDegrees < 0f) pitchDegrees = Mathf.MoveTowards(pitchDegrees, 0f, 90f * dt);
             }
-            position.y = Mathf.Min(position.y, altitudeMax);
 
+            position.y = Mathf.Min(position.y, altitudeMax);
             transform.position = position;
         }
 
@@ -282,7 +325,7 @@ namespace FeelFreeFlying.Flight
         private void Launch()
         {
             Mode = MotionMode.Flying;
-            if (body != null) body.enabled = false;
+            if (body != null) body.enabled = collideWhileFlying;
 
             pitchDegrees = launchPitch;
             rollDegrees = 0f;
@@ -322,8 +365,8 @@ namespace FeelFreeFlying.Flight
             body.Move((horizontal + Vector3.up * verticalVelocity) * dt);
             speed = new Vector2(horizontal.x, horizontal.z).magnitude;
 
-            // 屋上から落ちても死なせない。落下しすぎたら飛行に戻す（→ CLAUDE.md 不変条件3）
-            if (transform.position.y < altitudeMin) Launch();
+            // 海へ落ちても死なせない。沈む前に飛行へ戻す（→ CLAUDE.md 不変条件3）
+            if (transform.position.y < seaLevel + altitudeAboveSeaMin) Launch();
         }
 
         // ------------------------------------------------------------------ 共通
@@ -350,7 +393,7 @@ namespace FeelFreeFlying.Flight
         public void ResetPose()
         {
             Mode = MotionMode.Flying;
-            if (body != null) body.enabled = false;
+            if (body != null) body.enabled = collideWhileFlying;
 
             pitchDegrees = 0f;
             rollDegrees = 0f;
