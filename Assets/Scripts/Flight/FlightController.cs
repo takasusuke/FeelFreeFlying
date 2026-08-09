@@ -57,9 +57,6 @@ namespace FeelFreeFlying.Flight
 
         [SerializeField, Range(10f, 89f)] private float rollLimit = 70f;
 
-        [Tooltip("横移動が進路を曲げる強さ。1で真横へ45度ぶん流れる")]
-        [SerializeField, Range(0f, 2f)] private float strafeInfluence = 0.7f;
-
         [Tooltip("姿勢の追従の鈍さ (秒)。大きいほどふわっとするが、遅れて感じる")]
         [SerializeField, Range(0f, 0.5f)] private float attitudeSmoothing = 0.1f;
 
@@ -126,6 +123,7 @@ namespace FeelFreeFlying.Flight
         private int airJumpsUsed;
         private float wallRunRemaining;
         private bool jumpHeldLastFrame;
+        private bool recenterViewRequested;
 
         private Vector3 startPosition;
         private float startYaw;
@@ -143,8 +141,16 @@ namespace FeelFreeFlying.Flight
         public float RollDegrees => rollDegrees;
         public bool IsBoosting { get; private set; }
 
-        /// <summary>横移動の入力 (-1〜1)。機体の傾きと進路のずれに使う。</summary>
-        public float StrafeInput { get; private set; }
+        /// <summary>視点を動かす入力（右スティック）。カメラが読む。**進路には影響しない。**</summary>
+        public Vector2 LookInput { get; private set; }
+
+        /// <summary>視点を進行方向へ戻す指示があったか。カメラが読んで消費する。</summary>
+        public bool ConsumeRecenterView()
+        {
+            if (!recenterViewRequested) return false;
+            recenterViewRequested = false;
+            return true;
+        }
         public MotionMode Mode { get; private set; } = MotionMode.Flying;
         public bool IsWalking => Mode == MotionMode.Walking;
         public bool InvertPitch => invertPitch;
@@ -170,6 +176,7 @@ namespace FeelFreeFlying.Flight
             float dt = Time.deltaTime;
 
             if (state.ToggleView) viewToggleRequested = true;
+            if (state.RecenterView) recenterViewRequested = true;
             if (state.ToggleInvert)
             {
                 invertPitch = !invertPitch;
@@ -208,30 +215,32 @@ namespace FeelFreeFlying.Flight
         // ------------------------------------------------------------------ 飛行
 
         /// <summary>
-        /// 姿勢。**歩行と同じ操作体系**にしてある——右スティック（またはマウス）で見回し、
-        /// **見ている方向へ飛ぶ**。左スティックの左右は横移動で、機体はその方向へ傾くだけ。
+        /// 姿勢。**進む方向は左スティック（またはマウス）で決める。**
+        /// 左右で旋回、上下で上昇・下降。右スティックは<see cref="LookInput"/>としてカメラへ渡し、
+        /// **進路には一切影響しない**。
         ///
-        /// 元はバンク旋回（傾けて曲がる）だったが、歩行と飛行で操作の意味が変わるのをやめた。
-        /// 見たい方向へ向くことと、そこへ進むことが同じ操作になる。
+        /// 一度は「見ている方向へ飛ぶ」にしたが、それだと**高度を保ったまま下を眺める**ことが
+        /// できない。街を見に来ている以上、見る方向と進む方向は別々に操作できる必要がある。
         /// </summary>
         private void UpdateAttitude(FlightInputState state, float dt)
         {
-            // マウスと右スティックが視点。反転の対象はここ（矢印キーは常に↑で上向き）
-            float lookX = state.Aim.x + state.RightStick.x;
-            float lookY = (state.Aim.y + state.RightStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y;
+            // 反転の対象はマウスとスティックだけ（矢印キーは常に↑で上向き）
+            float turnInput = Mathf.Clamp(state.Aim.x + state.LeftStick.x + state.Keys.x, -1f, 1f);
+            float climbInput = Mathf.Clamp(
+                (state.Aim.y + state.LeftStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y, -1f, 1f);
 
-            yawDegrees += lookX * lookRate * dt;
-            pitchDegrees = Mathf.Clamp(pitchDegrees + lookY * lookRate * dt, -pitchLimit, pitchLimit);
+            yawDegrees += turnInput * lookRate * dt;
+            pitchDegrees = Mathf.Clamp(pitchDegrees + climbInput * pitchRate * dt, -pitchLimit, pitchLimit);
 
-            StrafeInput = Mathf.Clamp(state.LeftStick.x + state.Keys.x, -1f, 1f);
+            LookInput = state.RightStick;
 
             if (state.LevelFlight)
             {
                 pitchDegrees = Mathf.MoveTowards(pitchDegrees, 0f, pitchRate * 2f * dt);
             }
 
-            // ロールは見た目だけ。横移動している方向へ機体が傾く
-            float targetRoll = StrafeInput * rollLimit;
+            // ロールは見た目だけ。曲がっている方向へ機体が傾く
+            float targetRoll = turnInput * rollLimit;
             rollDegrees = Mathf.MoveTowards(rollDegrees, targetRoll, rollRate * dt);
 
             var target = Quaternion.Euler(-pitchDegrees, yawDegrees, -rollDegrees);
@@ -271,9 +280,7 @@ namespace FeelFreeFlying.Flight
 
         private void MoveFlying(float dt)
         {
-            // 見ている方向へ進み、左スティックの左右でその進路を横へずらす
-            Vector3 direction = transform.forward + transform.right * (StrafeInput * strafeInfluence);
-            Vector3 delta = direction.normalized * (EffectiveSpeed * dt);
+            Vector3 delta = transform.forward * (EffectiveSpeed * dt);
 
             if (collideWhileFlying && body != null)
             {
@@ -375,7 +382,7 @@ namespace FeelFreeFlying.Flight
             // 視線。マウス（または右スティック）で回し、身体は水平のまま
             float lookX = state.Aim.x + state.RightStick.x;
             float lookY = (state.Aim.y + state.RightStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y;
-            StrafeInput = 0f;
+            LookInput = Vector2.zero; // 歩行中は視点がそのまま身体の向きなので、別に持たない
 
             yawDegrees += lookX * lookRate * dt;
             pitchDegrees = Mathf.Clamp(pitchDegrees + lookY * lookRate * dt, -80f, 80f);
@@ -385,10 +392,13 @@ namespace FeelFreeFlying.Flight
             Vector2 move = Vector2.ClampMagnitude(state.Keys + state.LeftStick, 1f);
 
             // **上を向いてダッシュしたらそのまま飛び立つ。** 走って屋上の縁から跳ぶ動きと、
-            // 飛行への移行が別操作だと、そこで動きが一度止まる
-            if (state.Dash && move.y > 0.3f && pitchDegrees >= seamlessLaunchPitch)
+            // 飛行への移行が別操作だと、そこで動きが一度止まる。
+            // **落下中もダッシュで飛べる。** 屋上から飛び降りてから飛ぶのが自然な動きで、
+            // その時に上を向き直させるのは操作を増やすだけ
+            bool falling = !body.isGrounded;
+            if (state.Dash && (falling || (move.y > 0.3f && pitchDegrees >= seamlessLaunchPitch)))
             {
-                speed = runSpeed;
+                speed = Mathf.Max(runSpeed, speed);
                 Launch();
                 return;
             }

@@ -59,6 +59,9 @@ namespace FeelFreeFlying.Flight
 
         /// <summary>飛行中の当たり判定を切り替える。</summary>
         public bool ToggleCollision;
+
+        /// <summary>視点を進行方向へ戻す（R3）。</summary>
+        public bool RecenterView;
     }
 
     /// <summary>
@@ -173,6 +176,7 @@ namespace FeelFreeFlying.Flight
             if (pad.rightShoulder.isPressed) { state.Dash = true; UsingGamepad = true; }   // R1: 歩行のダッシュ
             if (pad.leftTrigger.ReadValue() > 0.4f) { state.Jump = true; UsingGamepad = true; }
             if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
+            if (pad.rightStickButton.wasPressedThisFrame) { state.RecenterView = true; UsingGamepad = true; }
             if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
             if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
             if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }

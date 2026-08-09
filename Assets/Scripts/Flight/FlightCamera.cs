@@ -70,6 +70,15 @@ namespace FeelFreeFlying.Flight
         [Tooltip("腕が映るように近くまで描く。三人称の1mのままだと腕が切れる")]
         [SerializeField, Min(0.01f)] private float firstPersonNearClip = 0.12f;
 
+        [Header("視点（右スティック）")]
+        [Tooltip("左右に振れる角度")]
+        [SerializeField, Range(0f, 180f)] private float lookYawRange = 160f;
+
+        [Tooltip("上下に振れる角度")]
+        [SerializeField, Range(0f, 89f)] private float lookPitchRange = 80f;
+
+        [SerializeField, Min(1f)] private float lookRate = 150f;
+
         [Header("画角")]
         [SerializeField, Range(30f, 120f)] private float fieldOfViewMin = 62f;
         [SerializeField, Range(30f, 130f)] private float fieldOfViewMax = 82f;
@@ -79,6 +88,9 @@ namespace FeelFreeFlying.Flight
         private Camera cameraComponent;
         private Vector3 followVelocity;
         private Renderer[] bodyRenderers;
+
+        /// <summary>視点のずれ（x=ヨー, y=ピッチ）。戻すまで保持する。</summary>
+        private Vector2 look;
 
         /// <summary>いまの視点。HUDの表示に使う。</summary>
         public ViewMode Mode => mode;
@@ -124,6 +136,7 @@ namespace FeelFreeFlying.Flight
             }
 
             float dt = Time.deltaTime;
+            UpdateLook(dt);
             if (mode == ViewMode.FirstPerson) UpdateFirstPerson(dt); else UpdateThirdPerson(dt);
             UpdateFieldOfView(dt);
         }
@@ -166,11 +179,29 @@ namespace FeelFreeFlying.Flight
         /// <summary>目の位置。飛行と歩行で姿勢が違うので分ける。</summary>
         private Vector3 EyeOffset => target.IsWalking ? walkFirstPersonOffset : firstPersonOffset;
 
-        /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。</summary>
+        /// <summary>
+        /// 右スティックで視点だけを動かす。**進路は変わらない。**
+        ///
+        /// **スティックを戻しても視点は戻さない。** 自動で正面へ戻すと、
+        /// 「高度を保ったまま下を見続ける」ができない。正面に戻したい時はR3で明示的に戻す。
+        /// </summary>
+        private void UpdateLook(float dt)
+        {
+            if (target.ConsumeRecenterView()) look = Vector2.zero;
+
+            Vector2 input = target.LookInput;
+            if (input.sqrMagnitude <= 0.0001f) return;
+
+            look.x = Mathf.Clamp(look.x + input.x * lookRate * dt, -lookYawRange, lookYawRange);
+            look.y = Mathf.Clamp(look.y + input.y * lookRate * dt, -lookPitchRange, lookPitchRange);
+        }
+
+        /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。視点のずれを最後に足す。</summary>
         private Quaternion Basis(float roll)
         {
             Vector3 euler = target.transform.eulerAngles;
-            return Quaternion.Euler(euler.x, euler.y, -target.RollDegrees * roll);
+            var attitude = Quaternion.Euler(euler.x, euler.y, -target.RollDegrees * roll);
+            return attitude * Quaternion.Euler(-look.y, look.x, 0f);
         }
 
         private void UpdateFieldOfView(float dt)
