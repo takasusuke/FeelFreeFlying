@@ -120,8 +120,9 @@ namespace FeelFreeFlying.Flight
         [Tooltip("飛び立つ時の初速 (m/s)")]
         [SerializeField, Min(1f)] private float launchSpeed = 16f;
 
-        [Tooltip("この角度より上を向いてダッシュすると、そのまま飛行へ移る (度)")]
-        [SerializeField, Range(5f, 80f)] private float seamlessLaunchPitch = 30f;
+        [Tooltip("この角度より上を向いてダッシュした時だけ飛行へ移る (度)。" +
+                 "**低すぎると、ただのダッシュジャンプで飛び立ってしまう**")]
+        [SerializeField, Range(5f, 80f)] private float seamlessLaunchPitch = 45f;
 
         [Tooltip("飛び立った直後に上向き入力を捨てる時間 (秒)")]
         [SerializeField, Range(0f, 3f)] private float climbLockSeconds = 0.8f;
@@ -131,7 +132,10 @@ namespace FeelFreeFlying.Flight
 
         [Tooltip("空中で入力が慣性を押す強さ (m/s^2)。**速度を差し替えず足すだけ**なので、" +
                  "大きくしても勢いは消えない")]
-        [SerializeField, Min(1f)] private float airNudgeAcceleration = 16f;
+        [SerializeField, Min(1f)] private float airNudgeAcceleration = 30f;
+
+        [Tooltip("急降下（○ / 左Ctrl）の落下速度 (m/s)。慣性を消して真下へ落ちる")]
+        [SerializeField, Min(1f)] private float dropSpeed = 38f;
 
         [Tooltip("飛行をやめた時に上向きの勢いを何割残すか。1のままだと数百m打ち上がる")]
         [SerializeField, Range(0f, 1f)] private float upwardMomentumFactor = 0.3f;
@@ -492,7 +496,10 @@ namespace FeelFreeFlying.Flight
             // **落下中もダッシュで飛べる。** 屋上から飛び降りてから飛ぶのが自然な動きで、
             // その時に上を向き直させるのは操作を増やすだけ
             bool falling = !body.isGrounded;
-            if (state.Dash && (falling || (move.y > 0.3f && pitchDegrees >= seamlessLaunchPitch)))
+
+            // **上を向いている時だけ飛び立つ。** 走りながら跳んだだけで飛行へ移ると、
+            // 屋上を跳び回る遊びが成立しない（ダッシュ＋ジャンプは普通の動作）
+            if (state.Dash && pitchDegrees >= seamlessLaunchPitch && (falling || move.y > 0.3f))
             {
                 speed = Mathf.Max(runSpeed, speed);
 
@@ -534,6 +541,15 @@ namespace FeelFreeFlying.Flight
             bool jumpHeld = state.Jump || state.TriggerLeft > 0.4f;
             bool jumpPressed = jumpHeld && !jumpHeldLastFrame;
             jumpHeldLastFrame = jumpHeld;
+
+            // **その場に落ちる。** 落下中に狙った真下へ降りたい時のための操作。
+            // 慣性を消してから落とすので、勢い余って屋上を通り過ぎることがない
+            if (falling && state.DropStraight)
+            {
+                walkVelocity = Vector3.zero;
+                verticalVelocity = -dropSpeed;
+                ShowNotice("急降下");
+            }
 
             if (body.isGrounded)
             {

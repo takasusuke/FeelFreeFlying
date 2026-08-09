@@ -59,6 +59,9 @@ namespace FeelFreeFlying.Flight
 
         /// <summary>視点を進行方向へ戻す（R3）。</summary>
         public bool RecenterView;
+
+        /// <summary>落下中に慣性を消して真下へ落ちる（○ / 左Ctrl）。</summary>
+        public bool DropStraight;
     }
 
     /// <summary>
@@ -175,6 +178,7 @@ namespace FeelFreeFlying.Flight
                 ? pad.buttonSouth.isPressed
                 : pad.leftTrigger.ReadValue() > 0.4f;
             if (jumpPressed) { state.Jump = true; UsingGamepad = true; }
+            if (pad.buttonEast.wasPressedThisFrame) { state.DropStraight = true; UsingGamepad = true; }
             if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
             if (pad.rightStickButton.wasPressedThisFrame) { state.RecenterView = true; UsingGamepad = true; }
             if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
@@ -240,6 +244,7 @@ namespace FeelFreeFlying.Flight
             if (keyboard.cKey.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = false; }
             if (keyboard.iKey.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = false; }
             if (keyboard.kKey.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = false; }
+            if (keyboard.leftCtrlKey.wasPressedThisFrame) { state.DropStraight = true; UsingGamepad = false; }
 
             if (keyboard.rKey.wasPressedThisFrame)
             {
