@@ -123,7 +123,10 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Range(0f, 3f)] private float climbLockSeconds = 0.8f;
 
         [Tooltip("落下中に左スティックで動ける割合。1で地上と同じ")]
-        [SerializeField, Range(0f, 1f)] private float airControl = 0.85f;
+        [SerializeField, Range(0f, 1f)] private float airControl = 1f;
+
+        [Tooltip("空中で進行方向を変えられる速さ (m/s^2)。**小さいほど慣性が強い**")]
+        [SerializeField, Min(1f)] private float airAcceleration = 22f;
 
         private float pitchDegrees;
         private float rollDegrees;
@@ -136,6 +139,7 @@ namespace FeelFreeFlying.Flight
         private bool recenterViewRequested;
         private float climbLockRemaining;
         private Vector3 lastHitNormal;
+        private Vector3 walkVelocity;
 
         private Vector3 startPosition;
         private float startYaw;
@@ -390,8 +394,15 @@ namespace FeelFreeFlying.Flight
             }
 
             Mode = MotionMode.Walking;
-            speed = 0f;
-            verticalVelocity = 0f;
+
+            // **飛んできた勢いを歩行へ引き継ぐ。** 着地の瞬間に速度が0になると、
+            // 空中で急停止してから落ちるように見える
+            Vector3 velocity = transform.forward * EffectiveSpeed;
+            walkVelocity = new Vector3(velocity.x, 0f, velocity.z);
+            walkVelocity = Vector3.ClampMagnitude(walkVelocity, runSpeed);
+            verticalVelocity = Mathf.Min(velocity.y, 0f);
+
+            speed = walkVelocity.magnitude;
             rollDegrees = 0f;
             pitchDegrees = 0f;
             IsBoosting = false;
@@ -419,9 +430,11 @@ namespace FeelFreeFlying.Flight
             pitchDegrees = Mathf.Clamp(pitchDegrees, -pitchLimit, pitchLimit);
             rollDegrees = 0f;
 
-            // 落下の勢いは活かす。止まってから飛び出すと重く感じる
-            speed = Mathf.Max(launchSpeed, speed);
+            // **歩行の勢いをそのまま飛行速度にする。** 走っていた速さも落下の速さも失わない
+            float carried = new Vector3(walkVelocity.x, verticalVelocity, walkVelocity.z).magnitude;
+            speed = Mathf.Max(launchSpeed, Mathf.Max(speed, carried));
             verticalVelocity = 0f;
+            walkVelocity = Vector3.zero;
 
             // **飛び立った直後は上入力を捨てる。** 走り出す時はたいてい左スティックを
             // 前に倒しているので、そのまま飛行に移ると意図せず上昇し続けてしまう
@@ -467,8 +480,21 @@ namespace FeelFreeFlying.Flight
 
             Quaternion heading = Quaternion.Euler(0f, yawDegrees, 0f);
             float moveSpeed = state.Dash ? runSpeed : walkSpeed;
-            if (falling) moveSpeed *= airControl; // 落下中も左スティックで動ける
-            Vector3 horizontal = heading * new Vector3(move.x, 0f, move.y) * moveSpeed;
+            Vector3 desired = heading * new Vector3(move.x, 0f, move.y) * moveSpeed;
+
+            // **空中では慣性を持つ。** 地上のように入力＝速度にすると、飛び降りた勢いが
+            // 足を離した瞬間に消えて、空中で止まって落ちるだけになる
+            if (falling)
+            {
+                walkVelocity = Vector3.MoveTowards(
+                    walkVelocity, desired * airControl, airAcceleration * dt);
+            }
+            else
+            {
+                walkVelocity = desired;
+            }
+
+            Vector3 horizontal = walkVelocity;
 
             bool jumpHeld = state.Jump || state.TriggerLeft > 0.4f;
             bool jumpPressed = jumpHeld && !jumpHeldLastFrame;
@@ -550,6 +576,7 @@ namespace FeelFreeFlying.Flight
             yawDegrees = startYaw;
             speed = speedStart;
             verticalVelocity = 0f;
+            walkVelocity = Vector3.zero;
 
             input?.ClearAim();
             transform.SetPositionAndRotation(startPosition, Quaternion.Euler(0f, startYaw, 0f));

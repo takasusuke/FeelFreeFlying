@@ -28,6 +28,7 @@ namespace FeelFreeFlying.Flight
         private GUIStyle compassMinorStyle;
         private GUIStyle travelStyle;
         private Transform viewTransform;
+        private FlightCamera view;
 
         private void Awake()
         {
@@ -35,7 +36,7 @@ namespace FeelFreeFlying.Flight
             if (input == null) input = FindFirstObjectByType<FlightInput>();
 
             // 方位帯は「見ている方向」を指すので、機体ではなくカメラの向きを読む
-            var view = FindFirstObjectByType<FlightCamera>();
+            view = FindFirstObjectByType<FlightCamera>();
             if (view != null) viewTransform = view.transform;
         }
 
@@ -155,9 +156,14 @@ namespace FeelFreeFlying.Flight
             DrawTravelMarker(area, heading);
         }
 
-        /// <summary>進む方向の印。視点とずれている時だけ意味を持つ。</summary>
+        /// <summary>
+        /// 進む方向の印。**一人称のときだけ出す。**
+        /// 三人称なら自分の身体の向きが見えているので、印は画面を汚すだけになる。
+        /// </summary>
         private void DrawTravelMarker(Rect area, float viewHeading)
         {
+            if (view == null || view.Mode != FlightCamera.ViewMode.FirstPerson) return;
+
             float travel = target.transform.eulerAngles.y;
             float delta = Mathf.DeltaAngle(viewHeading, travel);
 

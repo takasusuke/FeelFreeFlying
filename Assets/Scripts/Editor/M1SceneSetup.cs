@@ -258,9 +258,10 @@ namespace FeelFreeFlying.EditorTools
             // 胴（半径0.17）より上へ出さないと身体にめり込む。肩の後ろから始めて後方へ流す。
             // **幅は胴（0.34）より細くする。** 同じか広いと、斜め後ろからのカメラに対して
             // 面が正対して身体を完全に隠す（3回同じ失敗をした）
+            // **首元から始めて足には掛けない。** 後ろにずらしすぎると脚に乗った布に見える
             AddPart(parent, "Cape", PrimitiveType.Cube,
-                new Vector3(0f, 0.17f, -0.52f), new Vector3(-20f, 0f, 0f),
-                new Vector3(0.24f, 0.02f, 0.9f), cape);
+                new Vector3(0f, 0.17f, -0.16f), new Vector3(-14f, 0f, 0f),
+                new Vector3(0.24f, 0.02f, 0.86f), cape);
         }
 
         /// <summary>
@@ -286,9 +287,10 @@ namespace FeelFreeFlying.EditorTools
 
             // 立っている時のマントは背中に垂れる。胴（奥行き0.28）の外側に置き、
             // 幅は胴（0.34）より細くして両脇から身体が見えるようにする
+            // 肩から腰までに収める。足元まで垂らすと引きずっているように見える
             AddPart(parent, "Cape", PrimitiveType.Cube,
-                new Vector3(0f, 0.1f, -0.17f), new Vector3(4f, 0f, 0f),
-                new Vector3(0.28f, 0.66f, 0.02f), cape);
+                new Vector3(0f, 0.22f, -0.16f), new Vector3(4f, 0f, 0f),
+                new Vector3(0.28f, 0.56f, 0.02f), cape);
         }
 
         private static void AddPart(Transform parent, string name, PrimitiveType primitive,
