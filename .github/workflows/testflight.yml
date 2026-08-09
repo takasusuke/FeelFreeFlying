@@ -34,7 +34,10 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # self-hosted(このMac): 同じApple Developerチームの他リポジトリ
+    # (AppFactory Issue #634)が無料枠のmacOSランナー10倍課金を使い切った
+    # ため、この土台段階から自前ランナーに向けておく。
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
