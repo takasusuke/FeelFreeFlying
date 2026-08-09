@@ -86,12 +86,7 @@ namespace FeelFreeFlying.EditorTools
         {
             try
             {
-                WriteCatalog(GridCodes.Where(code => File.Exists(TileScenePath(code))));
-                M2TileOcclusion.BakeAll();
-
-                // **属性表も同じ範囲で出し直す。** タイルを広げた時に4枚ぶんの表が残り、
-                // 26,559棟中17,765棟が表に無い状態になった（→ m2-plan.md §4.5）
-                M2AttributeExport.ExportAll();
+                PrepareTilesInProcess();
                 EditorApplication.Exit(M2Verify.Check() ? 0 : 1);
             }
             catch (Exception exception)
@@ -99,6 +94,24 @@ namespace FeelFreeFlying.EditorTools
                 Debug.LogError($"[M2Tile] 失敗: {exception}");
                 EditorApplication.Exit(1);
             }
+        }
+
+        /// <summary>
+        /// 取り込みの後始末（外壁・当たり判定・位置表・焼き込み・属性表）。
+        /// **タイルを差し替える工程からも呼ぶ**ので、ここでは終了しない。
+        /// </summary>
+        /// <param name="paintWalls">
+        /// 外壁を高さ別に塗り直すか。**ランドマークの実写テクスチャを当てた直後はfalse**——
+        /// 塗り直すと、せっかく残した実写を無地の外壁で上書きしてしまう。
+        /// </param>
+        public static void PrepareTilesInProcess(bool paintWalls = true)
+        {
+            WriteCatalog(GridCodes.Where(code => File.Exists(TileScenePath(code))), paintWalls);
+            M2TileOcclusion.BakeAll();
+
+            // **属性表も同じ範囲で出し直す。** タイルを広げた時に4枚ぶんの表が残り、
+            // 26,559棟中17,765棟が表に無い状態になった（→ m2-plan.md §4.5）
+            M2AttributeExport.ExportAll();
         }
 
         private static async Task BuildTilesAsync(bool exitWhenDone)
@@ -155,7 +168,7 @@ namespace FeelFreeFlying.EditorTools
         /// ついでに当たり判定も焼き込む——屋上を歩けることはM1で確かめた仕様なので、
         /// タイルに割った途端に歩けなくなるのは退行になる。
         /// </summary>
-        private static void WriteCatalog(IEnumerable<string> gridCodes)
+        private static void WriteCatalog(IEnumerable<string> gridCodes, bool paintWalls = true)
         {
             var entries = new List<TileCatalog.TileEntry>();
             var materialCache = new Dictionary<string, Material>();
@@ -167,7 +180,7 @@ namespace FeelFreeFlying.EditorTools
                 Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
 
                 // **1回開く間に全部済ませる。** 200MBのシーンを開き直すのは高い
-                int painted = M2TileMaterials.Paint(materialCache, tierTotals);
+                int painted = paintWalls ? M2TileMaterials.Paint(materialCache, tierTotals) : 0;
                 int colliders = AddColliders();
                 Bounds bounds = MeasureBounds();
 

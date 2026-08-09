@@ -109,7 +109,8 @@ namespace FeelFreeFlying.EditorTools
         /// アセットではなく**シーンに埋め込まれた**オブジェクトなので、参照されなくなっても
         /// シーンに残り、そのままビルドに入る（実測でビルドが451MB膨らんだ）。
         /// </summary>
-        private static int DiscardUnreferencedTextures(IEnumerable<MeshRenderer> landmarks)
+        /// <summary>タイル単位の変換からも同じ処理を呼ぶ（M2）。</summary>
+        public static int DiscardUnreferencedTextures(IEnumerable<MeshRenderer> landmarks)
         {
             var keep = new HashSet<Texture>();
 

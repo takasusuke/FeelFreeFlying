@@ -326,11 +326,13 @@ namespace FeelFreeFlying.EditorTools
         /// 別々に取り込んだタイルを並べても位置が合う。
         /// </summary>
         public static async Task<int> ImportTile(string gridCode, string targetScenePath,
-            string[] allGridCodes)
+            string[] allGridCodes, bool includeTexture = false)
         {
             gridCodes = new[] { gridCode };
             referenceGridCodes = allGridCodes;
-            return await ImportFallbackInto(targetScenePath, false,
+
+            // アトラスは2048px。**4096pxだと15棟で+451MB増える**（→ m1-plan.md §6.3）
+            return await ImportFallbackInto(targetScenePath, includeTexture,
                 TexturePackingResolution.W2048H2048, exitWhenDone: false);
         }
 
