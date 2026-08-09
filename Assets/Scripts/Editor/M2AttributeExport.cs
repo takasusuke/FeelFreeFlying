@@ -30,12 +30,13 @@ namespace FeelFreeFlying.EditorTools
         private const string DatasetPath = "Data/Plateau/13104_shinjuku-ku_pref_2025_citygml_1_op";
         private const string OutputDir = "Data/Plateau/attributes";
 
-        /// <summary>新宿駅周辺の3次メッシュ4枚（`M0CityImport`と同じ範囲）。</summary>
-        private static readonly string[] GridCodes =
-        {
-            "53394525", "53394526",
-            "53394535", "53394536",
-        };
+        /// <summary>
+        /// 取り込むタイルと**同じ範囲**を見る（`M2TilePipeline.GridCodesInUse`）。
+        ///
+        /// **別々に持つと必ずずれる。** 実際、タイルを9枚に広げた時に属性表が4枚ぶんのまま残り、
+        /// 26,559棟のうち17,765棟が表に無い状態になった（`M2Verify`が検出）。
+        /// </summary>
+        private static string[] GridCodes => M2TilePipeline.GridCodesInUse;
 
         /// <summary>M3の抽出ルールで使いたい属性。**入れ子はスラッシュ区切りで潰す。**</summary>
         private static readonly string[] WantedKeys =
@@ -50,7 +51,12 @@ namespace FeelFreeFlying.EditorTools
         };
 
         [MenuItem("Tools/FeelFreeFlying/M2: CityGMLから属性を書き出す")]
-        public static void Export()
+        public static void Export() => Run(exitWhenDone: true);
+
+        /// <summary>取り込みの続きとして呼ぶ入口。**ここでは終了しない。**</summary>
+        public static void ExportAll() => Run(exitWhenDone: false);
+
+        private static void Run(bool exitWhenDone)
         {
             string datasetFullPath = Path.GetFullPath(DatasetPath);
             var gmlFiles = FindBuildingGmlFiles(datasetFullPath);
@@ -58,7 +64,7 @@ namespace FeelFreeFlying.EditorTools
             if (gmlFiles.Count == 0)
             {
                 Debug.LogError($"[M2Attr] 対象のGMLが見つかりません: {datasetFullPath}");
-                EditorApplication.Exit(1);
+                if (exitWhenDone) EditorApplication.Exit(1);
                 return;
             }
 

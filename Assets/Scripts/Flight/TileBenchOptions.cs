@@ -37,6 +37,21 @@ namespace FeelFreeFlying.Flight
                 }
             }
 
+            // **読み込む距離を変える。** 同時に置く枚数を変えて測るため
+            int distanceIndex = System.Array.IndexOf(args, "-ffm2bench-loaddistance");
+            if (distanceIndex >= 0 && distanceIndex + 1 < args.Length &&
+                float.TryParse(args[distanceIndex + 1], out float load))
+            {
+                var streamer = FindAnyObjectByType<TileStreamer>();
+                if (streamer != null)
+                {
+                    // **破棄の距離を近くに置く。** 既定の余裕（+700m）のままだと、
+                    // 読み込みを絞っても一度置いたタイルが残り続けて条件が変わらない
+                    streamer.OverrideDistances(load, load + 250f);
+                    Debug.Log($"[BenchOptions] 読み込み距離を {load} m にした");
+                }
+            }
+
             // **焼いたオクルージョンカリングを切る。** 効果を同じビルドで測るため
             if (System.Array.IndexOf(args, "-ffm2bench-noocclusion") >= 0)
             {

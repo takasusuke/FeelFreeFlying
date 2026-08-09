@@ -31,11 +31,44 @@ namespace FeelFreeFlying.EditorTools
         private const string CatalogPath = CatalogDir + "/" + TileCatalog.ResourcePath + ".json";
 
         /// <summary>新宿駅周辺。**M0の計測と同じ範囲**なので、数字を並べて比べられる。</summary>
-        private static readonly string[] GridCodes =
+        private static readonly string[] DefaultGridCodes =
         {
             "53394525", "53394526",
             "53394535", "53394536",
         };
+
+        /// <summary>
+        /// 取り込む範囲。**パイプラインの入力はメッシュコードの集合**（→ m2-plan.md §2）なので、
+        /// コマンドラインから渡せるようにする。
+        ///
+        ///   -ffm2tiles-grid 53394525,53394526,53394527,...
+        /// </summary>
+        private static string[] GridCodes => ResolveGridCodes();
+
+        /// <summary>他の工程（属性の書き出し等）が同じ範囲を見るための入口。</summary>
+        public static string[] GridCodesInUse => ResolveGridCodes();
+
+        private const string GridArg = "-ffm2tiles-grid";
+
+        private static string[] ResolveGridCodes()
+        {
+            string[] args = Environment.GetCommandLineArgs();
+
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] != GridArg) continue;
+
+                string[] codes = args[i + 1]
+                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(code => code.Trim())
+                    .Where(code => code.Length > 0)
+                    .ToArray();
+
+                if (codes.Length > 0) return codes;
+            }
+
+            return DefaultGridCodes;
+        }
 
         public static string TileScenePath(string gridCode) => $"{TileDir}/Tile_{gridCode}.unity";
 
@@ -55,6 +88,10 @@ namespace FeelFreeFlying.EditorTools
             {
                 WriteCatalog(GridCodes.Where(code => File.Exists(TileScenePath(code))));
                 M2TileOcclusion.BakeAll();
+
+                // **属性表も同じ範囲で出し直す。** タイルを広げた時に4枚ぶんの表が残り、
+                // 26,559棟中17,765棟が表に無い状態になった（→ m2-plan.md §4.5）
+                M2AttributeExport.ExportAll();
                 EditorApplication.Exit(M2Verify.Check() ? 0 : 1);
             }
             catch (Exception exception)
@@ -94,6 +131,10 @@ namespace FeelFreeFlying.EditorTools
                 // **オクルージョンカリングまでを1コマンドに含める。** 別工程にすると
                 // 焼き忘れたタイルが混ざり、どのタイルがどの条件か分からなくなる
                 M2TileOcclusion.BakeAll();
+
+                // **属性表も同じ範囲で出し直す。** タイルを広げた時に4枚ぶんの表が残り、
+                // 26,559棟中17,765棟が表に無い状態になった（→ m2-plan.md §4.5）
+                M2AttributeExport.ExportAll();
 
                 // **作った直後に確かめる。** ここを人の目に任せると、
                 // 4枚が原点に重なっていても気づかない（→ m2-plan.md §4.2）

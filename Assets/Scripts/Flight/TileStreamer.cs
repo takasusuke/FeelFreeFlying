@@ -21,17 +21,20 @@ namespace FeelFreeFlying.Flight
         [Tooltip("この人の周りを読み込む。未設定ならFlightControllerを探す")]
         [SerializeField] private Transform viewer;
 
-        [Tooltip("この距離まで近づいたら読み込む (m)")]
-        [SerializeField, Min(0f)] private float loadDistance = 1500f;
+        [Tooltip("この距離まで近づいたら読み込む (m)。**進行方向は別に先読みする**ので狭くてよい")]
+        [SerializeField, Min(0f)] private float loadDistance = 500f;
 
         [Tooltip("この距離まで離れたら破棄する (m)。読み込みより広くしないと境界で出入りを繰り返す")]
-        [SerializeField, Min(0f)] private float unloadDistance = 2200f;
+        [SerializeField, Min(0f)] private float unloadDistance = 900f;
 
         [Tooltip("進行方向を何秒先まで見るか。速度×この秒数だけ前方の判定を甘くする")]
         [SerializeField, Min(0f)] private float lookAheadSeconds = 10f;
 
-        [Tooltip("同時に置いてよい枚数。多すぎるとfpsが落ちる（→ m0-plan.md §5.1）")]
-        [SerializeField, Min(1)] private int maxLoaded = 9;
+        [Tooltip("同時に置いてよい枚数。**6枚で実測**（→ m2-plan.md §6）。9枚置くと60fpsを割る")]
+        [SerializeField, Min(1)] private int maxLoaded = 6;
+
+        [Tooltip("枠が埋まっている時、入れ替えに必要な距離の差 (m)。小さいと出し入れを繰り返す")]
+        [SerializeField, Min(0f)] private float evictMargin = 500f;
 
         [Tooltip("判定の間隔 (秒)。毎フレーム全タイルを見る必要はない")]
         [SerializeField, Min(0f)] private float checkInterval = 0.25f;
@@ -66,6 +69,13 @@ namespace FeelFreeFlying.Flight
             Loading,
             Loaded,
             Unloading,
+        }
+
+        /// <summary>読み込む距離を上書きする。計測で「同時に何枚まで置けるか」を詰めるため。</summary>
+        public void OverrideDistances(float load, float unload)
+        {
+            loadDistance = load;
+            unloadDistance = unload;
         }
 
         private void Awake()
@@ -138,13 +148,47 @@ namespace FeelFreeFlying.Flight
             // 近い順に読む。**遠くを先に読むと、目の前が最後になる**
             wanted.Sort((a, b) => a.score.CompareTo(b.score));
 
-            foreach ((TileCatalog.TileEntry entry, float _) in wanted)
+            foreach ((TileCatalog.TileEntry entry, float score) in wanted)
             {
-                if (LoadedCount >= maxLoaded) break;
+                // 枠が埋まっていたら、**近づいたタイルのために一番遠いタイルを退ける**。
+                // 埋まった時点で打ち切ると、目の前のタイルが遠いタイルの後ろで待たされる
+                if (LoadedCount >= maxLoaded)
+                {
+                    TileCatalog.TileEntry farthest = FarthestLoaded(position, out float farthestDistance);
+
+                    // **入れ替えるだけの差が要る。** 僅差で入れ替えると、外したタイルが
+                    // すぐまた「読みたい」側に回って出し入れを繰り返す
+                    // （余裕を入れずに測ったら出し入れが22回から64回に増え、
+                    //  最悪フレームが21.4fpsから7.3fpsまで落ちた → m2-plan.md §6）
+                    if (farthest == null || farthestDistance <= score + evictMargin) break;
+
+                    yield return Unload(farthest);
+                }
 
                 yield return Load(entry);
                 if (!waitForFirst) break; // 1回の判定で読むのは1枚。まとめて読むと引っかかる
             }
+        }
+
+        /// <summary>置かれているタイルのうち、今いる場所から一番遠いもの。</summary>
+        private TileCatalog.TileEntry FarthestLoaded(Vector3 position, out float distance)
+        {
+            TileCatalog.TileEntry farthest = null;
+            distance = 0f;
+
+            foreach (TileCatalog.TileEntry entry in catalog.Tiles)
+            {
+                if (!states.TryGetValue(entry.sceneName, out TileState state)) continue;
+                if (state != TileState.Loaded) continue;
+
+                float candidate = entry.HorizontalDistanceTo(position);
+                if (farthest != null && candidate <= distance) continue;
+
+                farthest = entry;
+                distance = candidate;
+            }
+
+            return farthest;
         }
 
         /// <summary>
