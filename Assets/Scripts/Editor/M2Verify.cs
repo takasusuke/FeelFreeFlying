@@ -49,6 +49,7 @@ namespace FeelFreeFlying.EditorTools
                 CheckRegisteredInBuild(catalog, problems);
                 CheckTilesDoNotOverlap(catalog, problems);
                 CheckBuildingCount(catalog, problems);
+                CheckAttributesMatch(catalog, problems);
             }
 
             if (problems.Count == 0)
@@ -91,7 +92,14 @@ namespace FeelFreeFlying.EditorTools
             }
         }
 
-        /// <summary>**登録していないシーンは実行時に読めない。** ビルドしてから気づくと痛い。</summary>
+        /// <summary>
+        /// **登録していないシーンは実行時に読めない。**
+        ///
+        /// ただし登録はビルドの直前に各ビルドスクリプトが行い、
+        /// `ProjectSettings/EditorBuildSettings.asset`は**タイルを指したままcommitしない**
+        /// （タイル自体がgit管理外なので、cloneした先で存在しないシーンを指すことになる）。
+        /// よってここで登録されていないこと自体は失敗ではなく、注意にとどめる。
+        /// </summary>
         private static void CheckRegisteredInBuild(TileCatalog catalog, List<string> problems)
         {
             var registered = EditorBuildSettings.scenes
@@ -99,14 +107,16 @@ namespace FeelFreeFlying.EditorTools
                 .Select(entry => entry.path)
                 .ToHashSet();
 
-            foreach (TileCatalog.TileEntry entry in catalog.Tiles)
-            {
-                string path = M2TilePipeline.TileScenePath(entry.gridCode);
-                if (!registered.Contains(path))
-                {
-                    problems.Add($"{entry.gridCode}: Build Settingsに入っていません（実行時に読めません）。");
-                }
-            }
+            var missing = catalog.Tiles
+                .Select(entry => M2TilePipeline.TileScenePath(entry.gridCode))
+                .Where(path => !registered.Contains(path))
+                .ToList();
+
+            if (missing.Count == 0) return;
+
+            Debug.LogWarning(
+                $"[M2Verify] Build Settingsに未登録のタイルが {missing.Count} 枚あります。" +
+                "ビルドスクリプトが直前に登録するので、そのままビルドして構いません。");
         }
 
         /// <summary>
@@ -171,6 +181,58 @@ namespace FeelFreeFlying.EditorTools
         }
 
         /// <summary>
+        /// タイルの建物の名前が、属性表のgmlIdと対応しているか。
+        ///
+        /// **M3の前提。** 見どころスポットは建物ごとの属性（用途・高さ・階数）から計算で決める
+        /// （`CLAUDE.md` 不変条件7）。タイルに割った建物と属性表が名前で繋がらなくなると、
+        /// M3が始められない。取り込み方を変えた時に**静かに壊れる**種類の依存なので、ここで見る。
+        /// </summary>
+        private static void CheckAttributesMatch(TileCatalog catalog, List<string> problems)
+        {
+            if (!File.Exists(AttributeCsv)) return;
+
+            var known = new HashSet<string>(StringComparer.Ordinal);
+            bool header = true;
+
+            foreach (string line in File.ReadLines(AttributeCsv))
+            {
+                if (header) { header = false; continue; }
+
+                int comma = line.IndexOf(',');
+                known.Add(comma > 0 ? line.Substring(0, comma) : line);
+            }
+
+            int checkedNames = 0;
+            int missing = 0;
+            string firstMissing = null;
+
+            foreach (TileCatalog.TileEntry entry in catalog.Tiles)
+            {
+                string path = M2TilePipeline.TileScenePath(entry.gridCode);
+                if (!File.Exists(path)) continue;
+
+                foreach (string name in BuildingNamesInSceneFile(path))
+                {
+                    checkedNames++;
+                    if (known.Contains(name)) continue;
+
+                    missing++;
+                    firstMissing ??= name;
+                }
+            }
+
+            if (missing > 0)
+            {
+                problems.Add($"属性表に無い建物が {missing}/{checkedNames} 棟あります（例: {firstMissing}）。" +
+                             "M3の見どころ抽出が建物と結びつけられません。");
+            }
+            else
+            {
+                Debug.Log($"[M2Verify] 属性表と対応: {checkedNames} 棟すべて。");
+            }
+        }
+
+        /// <summary>
         /// シーンのYAMLからGameObjectだけを数える。
         /// **`m_Name`を素朴に数えると二重になる**——メッシュもシーンに埋め込まれていて
         /// 同じ`bldg_`という名前を持つため。UnityのYAMLは`--- !u!<クラスID> &<ID>`で
@@ -178,8 +240,14 @@ namespace FeelFreeFlying.EditorTools
         /// </summary>
         private static int CountBuildingsInSceneFile(string path)
         {
-            const string classMarker = "--- !u!";
             int count = 0;
+            foreach (string _ in BuildingNamesInSceneFile(path)) count++;
+            return count;
+        }
+
+        private static IEnumerable<string> BuildingNamesInSceneFile(string path)
+        {
+            const string classMarker = "--- !u!";
             bool inGameObject = false;
 
             foreach (string line in File.ReadLines(path))
@@ -199,11 +267,10 @@ namespace FeelFreeFlying.EditorTools
                 if (index < 0) continue;
 
                 string name = line.Substring(index + "m_Name:".Length).Trim();
-                if (name.StartsWith("bldg_", StringComparison.Ordinal)) count++;
                 inGameObject = false; // 名前は1つだけ
-            }
 
-            return count;
+                if (name.StartsWith("bldg_", StringComparison.Ordinal)) yield return name;
+            }
         }
     }
 }
