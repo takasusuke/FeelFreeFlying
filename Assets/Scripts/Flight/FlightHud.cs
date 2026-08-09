@@ -95,6 +95,12 @@ namespace FeelFreeFlying.Flight
                     : $"高度 {target.transform.position.y:F0} m",
                 unitStyle);
 
+            // パッドが認識されているかを画面で確かめられるようにする（PS5対応の確認用）
+            if (input != null && !string.IsNullOrEmpty(input.PadName))
+            {
+                GUILayout.Label($"パッド: {input.PadName}", unitStyle);
+            }
+
             GUILayout.EndArea();
         }
 
@@ -158,18 +164,26 @@ namespace FeelFreeFlying.Flight
         private void DrawHints()
         {
             bool pad = input != null && input.UsingGamepad;
+            bool playStation = input != null && input.IsPlayStationPad;
+
+            // PlayStationのパッドは表記を合わせる（A/B/X/Y のままだと押し間違える）
+            string confirm = playStation ? "×" : "A";
+            string cancel = playStation ? "○" : "B";
+            string square = playStation ? "□" : "X";
+            string triangle = playStation ? "△" : "Y";
+            string select = playStation ? "CREATE" : "SELECT";
 
             string hints;
             if (target.IsWalking)
             {
                 hints = pad
-                    ? "左スティック: 歩く / A: ダッシュ / B: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / X: 飛び立つ / Y: 視点"
+                    ? $"左スティック: 歩く / {confirm}: ダッシュ / {cancel}: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / {square}: 飛び立つ / {triangle}: 視点"
                     : "W A S D: 歩く / Shift: ダッシュ / Space: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / F: 飛び立つ / C: 視点 / Esc: カーソル";
             }
             else
             {
                 hints = pad
-                    ? "左スティック: 傾ける / トリガー: 加減速 / A: ブースト / B: 水平 / X: 着地 / Y: 視点 / 十字上: 上下反転 / SELECT: やり直す"
+                    ? $"左スティック: 傾ける / トリガー: 加減速 / {confirm}: ブースト / {cancel}: 水平 / {square}: 着地 / {triangle}: 視点 / 十字上: 上下反転 / {select}: やり直す"
                     : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / F: 着地 / C: 視点 / I: 上下反転 / K: 当たり判定 / R: やり直す / Esc: カーソルを返す";
             }
 

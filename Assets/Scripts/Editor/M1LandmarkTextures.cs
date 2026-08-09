@@ -62,17 +62,23 @@ namespace FeelFreeFlying.EditorTools
                 .Take(count)
                 .ToList();
 
-            Material stylized = LoadGenericBuildingMaterial();
             var landmarkSet = new HashSet<MeshRenderer>(landmarks);
+            var materialCache = new Dictionary<string, Material>();
+            var tierCounts = new Dictionary<string, int>();
             int replaced = 0;
 
             foreach (MeshRenderer renderer in buildings)
             {
                 if (landmarkSet.Contains(renderer)) continue;
 
+                Material generic = MaterialForHeight(renderer.bounds.size.y, materialCache);
+
                 var materials = new Material[renderer.sharedMaterials.Length];
-                for (int i = 0; i < materials.Length; i++) materials[i] = stylized;
+                for (int i = 0; i < materials.Length; i++) materials[i] = generic;
                 renderer.sharedMaterials = materials;
+
+                tierCounts.TryGetValue(generic.name, out int seen);
+                tierCounts[generic.name] = seen + 1;
                 replaced++;
             }
 
@@ -84,6 +90,11 @@ namespace FeelFreeFlying.EditorTools
             Debug.Log(
                 $"[M1Landmark] 実写のまま残した建物: {landmarks.Count} 棟 / " +
                 $"様式化に差し替え: {replaced} 棟 / 捨てたテクスチャ: {discarded} 枚");
+
+            foreach (KeyValuePair<string, int> tier in tierCounts.OrderByDescending(pair => pair.Value))
+            {
+                Debug.Log($"[M1Landmark]   {tier.Key}: {tier.Value} 棟");
+            }
 
             foreach (MeshRenderer landmark in landmarks)
             {
@@ -148,26 +159,44 @@ namespace FeelFreeFlying.EditorTools
         }
 
         /// <summary>
-        /// ランドマーク以外に貼るマテリアル。**SDKのフォールバック（汎用の外壁テクスチャ）を使う。**
+        /// ランドマーク以外に貼るマテリアルを**高さで使い分ける**。
         ///
-        /// 最初は無地の白にしていたが、実写のランドマークと並ぶと**そこだけ写真が浮いて見えた**。
-        /// 窓や外壁の模様が入っているだけで馴染む。汎用テクスチャはパッケージ側のアセットなので、
-        /// 何棟に貼ってもビルド容量は増えない（実写テクスチャはシーンに埋め込まれるので増える）。
+        /// 全部同じ外壁だと、街が一様に見えて「どのあたりを飛んでいるか」が分からない。
+        /// 低層の住宅地と中層のオフィス街と高層ビル群が描き分けられるだけで、
+        /// 上空から見た時の情報量が変わる。
         ///
-        /// 様式化そのものはM5の課題。ここでは「実写ではない」「浮かない」を満たせば足りる。
+        /// 使うのはSDK同梱の汎用テクスチャで、**パッケージ側のアセットなのでビルド容量は増えない**
+        /// （実写テクスチャはシーンに埋め込まれるので増える）。
+        /// 様式化そのものはM5の課題。ここでは「実写ではない」「浮かない」「一様でない」で足りる。
         /// </summary>
-        private static Material LoadGenericBuildingMaterial()
+        private static readonly (float MaxHeight, string MaterialName)[] HeightTiers =
         {
-            Material fallback = PLATEAU.Util.FallbackMaterial.LoadByPackage(
-                PLATEAU.Dataset.PredefinedCityModelPackage.Building);
+            (12f, "PlateauGenericHouse"),        // 低層（住宅）
+            (30f, "PlateauDefaultBuildingC"),    // 中層
+            (70f, "PlateauDefaultBuildingB"),    // 中高層（オフィス）
+            (float.MaxValue, "PlateauDefaultBuildingA"), // 高層
+        };
 
-            if (fallback != null) return fallback;
+        private const string MaterialFolder = "Packages/com.synesthesias.plateau-unity-sdk/Resources/PlateauSdkDefaultMaterials";
 
-            Debug.LogWarning("[M1Landmark] SDKのフォールバックマテリアルが見つかりません。無地で代用します。");
-            return new Material(Shader.Find("Universal Render Pipeline/Lit"))
+        private static Material MaterialForHeight(float height, Dictionary<string, Material> cache)
+        {
+            string name = HeightTiers.First(tier => height < tier.MaxHeight).MaterialName;
+
+            if (cache.TryGetValue(name, out Material cached)) return cached;
+
+            var material = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/{name}.mat");
+            if (material == null)
             {
-                color = new Color(0.78f, 0.78f, 0.80f),
-            };
+                Debug.LogWarning($"[M1Landmark] {name} が見つかりません。無地で代用します。");
+                material = new Material(Shader.Find("Universal Render Pipeline/Lit"))
+                {
+                    color = new Color(0.78f, 0.78f, 0.80f),
+                };
+            }
+
+            cache[name] = material;
+            return material;
         }
     }
 }

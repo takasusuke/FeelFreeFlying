@@ -36,7 +36,7 @@ namespace FeelFreeFlying.Flight
         [Tooltip("開始時および姿勢リセット時の速度")]
         [SerializeField, Min(1f)] private float speedStart = 22f;
 
-        [Tooltip("スロットル操作に速度が追従する速さ (m/s^2)")]
+        [Tooltip("W/Sを押している間に速度が変わる割合 (m/s^2)。**離した速度をそのまま保つ**")]
         [SerializeField, Min(1f)] private float throttleAcceleration = 18f;
 
         [Tooltip("ブースト中の速度倍率")]
@@ -49,7 +49,8 @@ namespace FeelFreeFlying.Flight
         [Tooltip("機首上下の角速度 (度/秒)")]
         [SerializeField, Min(1f)] private float pitchRate = 55f;
 
-        [SerializeField, Range(10f, 89f)] private float pitchLimit = 65f;
+        [Tooltip("**真上・真下まで向ける。** 65度で止めると天頂と真下へ抜けられない")]
+        [SerializeField, Range(10f, 89f)] private float pitchLimit = 88f;
 
         [Tooltip("ロールの角速度 (度/秒)")]
         [SerializeField, Min(1f)] private float rollRate = 120f;
@@ -229,10 +230,9 @@ namespace FeelFreeFlying.Flight
                 {
                     rollDegrees = Mathf.MoveTowards(rollDegrees, 0f, autoLevelRate * dt);
                 }
-                if (Mathf.Approximately(pitchInput, 0f))
-                {
-                    pitchDegrees = Mathf.MoveTowards(pitchDegrees, 0f, autoLevelRate * 0.5f * dt);
-                }
+                // **機首は勝手に戻さない。** 真上・真下へ向けたまま昇り降りしたいので、
+                // 水平へ引き戻すのはロールだけにする（水平に戻したい時はSpace/B）
+
             }
 
             pitchDegrees = Mathf.Clamp(pitchDegrees, -pitchLimit, pitchLimit);
@@ -247,25 +247,34 @@ namespace FeelFreeFlying.Flight
                 : target;
         }
 
+        /// <summary>
+        /// 速度。**スロットルは「目標速度」ではなく「増減」**として扱う。
+        ///
+        /// 押している間だけ速度が変わり、離した速度をそのまま保つ。目標値へ戻る作りだと、
+        /// 手を離すたびに巡航速度へ引き戻され、「この速さで流したい」が効かない。
+        ///
+        /// ブーストは<see cref="speed"/>を書き換えず、移動時に掛けるだけにする。
+        /// 書き換えると、離した瞬間の速い値が巡航速度として居座ってしまう。
+        /// </summary>
         private void UpdateSpeed(FlightInputState state, float dt)
         {
             IsBoosting = state.Boost;
 
             float throttleInput = Mathf.Clamp(state.Keys.y + state.Trigger, -1f, 1f);
-            float throttle01 = Mathf.InverseLerp(-1f, 1f, throttleInput);
-            float targetSpeed = Mathf.Lerp(speedMin, speedMax, throttle01);
-            if (IsBoosting) targetSpeed = Mathf.Min(targetSpeed * boostMultiplier, speedMax * boostMultiplier);
-
-            speed = Mathf.MoveTowards(speed, targetSpeed, throttleAcceleration * dt);
+            speed += throttleInput * throttleAcceleration * dt;
 
             // 降下で速度が乗り、上昇で削がれる。位置エネルギーの交換のつもりで、力学ではない
             speed += Mathf.Sin(-pitchDegrees * Mathf.Deg2Rad) * diveAcceleration * dt;
-            speed = Mathf.Clamp(speed, speedMin * 0.5f, speedMax * boostMultiplier);
+
+            speed = Mathf.Clamp(speed, speedMin, speedMax);
         }
+
+        /// <summary>実際に進む速さ。ブーストは掛けるだけで、巡航速度は変えない。</summary>
+        private float EffectiveSpeed => IsBoosting ? speed * boostMultiplier : speed;
 
         private void MoveFlying(float dt)
         {
-            Vector3 delta = transform.forward * (speed * dt);
+            Vector3 delta = transform.forward * (EffectiveSpeed * dt);
 
             if (collideWhileFlying && body != null)
             {

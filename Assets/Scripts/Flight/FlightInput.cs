@@ -85,7 +85,36 @@ namespace FeelFreeFlying.Flight
         /// <summary>直近に操作されたのがゲームパッドか。操作ヒントの出し分けに使う。</summary>
         public bool UsingGamepad { get; private set; }
 
-        private void OnEnable() => SetCursorCaptured(lockCursor);
+        /// <summary>直近に使ったパッドの名前。認識されているかを画面で確かめるために出す。</summary>
+        public string PadName { get; private set; }
+
+        /// <summary>PlayStation系のパッドか。操作ヒントの記号を出し分ける。</summary>
+        public bool IsPlayStationPad { get; private set; }
+
+        private void OnEnable()
+        {
+            SetCursorCaptured(lockCursor);
+            LogDevices();
+        }
+
+        /// <summary>
+        /// 認識されている入力デバイスを一覧でログに出す。
+        ///
+        /// **パッドが動かない時、原因が「未接続」なのか「Input Systemが対応していない」なのかを
+        /// 切り分けられるようにするため。** PS5のDualSenseはHIDとして繋がるが、
+        /// Input Systemのバージョンによっては<see cref="Gamepad"/>として認識されないことがある。
+        /// その場合ここに名前は出るが<see cref="Gamepad.current"/>はnullになる。
+        /// </summary>
+        private void LogDevices()
+        {
+            foreach (InputDevice device in InputSystem.devices)
+            {
+                Debug.Log($"[FlightInput] 認識: {device.displayName} / {device.GetType().Name} " +
+                          $"(gamepadとして使える: {device is Gamepad})");
+            }
+
+            if (Gamepad.current == null) Debug.Log("[FlightInput] ゲームパッドは見つかりません。");
+        }
 
         private void OnDisable() => SetCursorCaptured(false);
 
@@ -104,6 +133,13 @@ namespace FeelFreeFlying.Flight
         {
             Gamepad pad = Gamepad.current;
             if (pad == null) return;
+
+            PadName = pad.displayName;
+
+            // DualShock/DualSenseはInput Systemが専用クラスで拾う。拾えない機種のために名前でも見る
+            IsPlayStationPad = pad is UnityEngine.InputSystem.DualShock.DualShockGamepad ||
+                               pad.displayName.IndexOf("DualSense", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               pad.displayName.IndexOf("Wireless Controller", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
             state.LeftStick = ApplyDeadZone(pad.leftStick.ReadValue());
             state.RightStick = ApplyDeadZone(pad.rightStick.ReadValue());
