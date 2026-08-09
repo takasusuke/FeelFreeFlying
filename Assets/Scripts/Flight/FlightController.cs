@@ -129,8 +129,12 @@ namespace FeelFreeFlying.Flight
         [Tooltip("落下中に左スティックで動ける割合。1で地上と同じ")]
         [SerializeField, Range(0f, 1f)] private float airControl = 1f;
 
-        [Tooltip("空中で進行方向を変えられる速さ (m/s^2)。**小さいほど慣性が強い**")]
-        [SerializeField, Min(1f)] private float airAcceleration = 22f;
+        [Tooltip("空中で入力が慣性を押す強さ (m/s^2)。**速度を差し替えず足すだけ**なので、" +
+                 "大きくしても勢いは消えない")]
+        [SerializeField, Min(1f)] private float airNudgeAcceleration = 16f;
+
+        [Tooltip("飛行をやめた時に上向きの勢いを何割残すか。1のままだと数百m打ち上がる")]
+        [SerializeField, Range(0f, 1f)] private float upwardMomentumFactor = 0.3f;
 
         [Tooltip("視線追従の時、横移動が進路を曲げる強さ")]
         [SerializeField, Range(0f, 2f)] private float StrafeInfluence = 0.7f;
@@ -422,10 +426,11 @@ namespace FeelFreeFlying.Flight
 
             Mode = MotionMode.Walking;
 
-            // **速度を削らない。** 水平ぶんは慣性、垂直ぶんはそのまま落下（上昇中なら跳ね上がる）
+            // 水平ぶんはそのまま慣性にする。**上向きだけは弱める**——
+            // 上昇中の速度をそのまま渡すと、人が数百m打ち上げられて street level へ戻れなくなる
             Vector3 velocity = transform.forward * EffectiveSpeed;
             walkVelocity = new Vector3(velocity.x, 0f, velocity.z);
-            verticalVelocity = velocity.y;
+            verticalVelocity = velocity.y > 0f ? velocity.y * upwardMomentumFactor : velocity.y;
 
             speed = walkVelocity.magnitude;
             rollDegrees = 0f;
@@ -506,12 +511,17 @@ namespace FeelFreeFlying.Flight
             float moveSpeed = state.Dash ? runSpeed : walkSpeed;
             Vector3 desired = heading * new Vector3(move.x, 0f, move.y) * moveSpeed;
 
-            // **空中では慣性を持つ。** 地上のように入力＝速度にすると、飛び降りた勢いが
-            // 足を離した瞬間に消えて、空中で止まって落ちるだけになる
+            // **空中では慣性を持ったまま、入力で少しだけ押せる。**
+            // 入力＝速度にすると勢いが消え、慣性だけにすると落ちる位置を選べない。
+            // 速度そのものを差し替えず、入力を加速度として足す
             if (falling)
             {
-                walkVelocity = Vector3.MoveTowards(
-                    walkVelocity, desired * airControl, airAcceleration * dt);
+                walkVelocity += heading * new Vector3(move.x, 0f, move.y) *
+                                (airNudgeAcceleration * airControl * dt);
+
+                // 空中で加速し続けられないように、持っていた勢い（か歩きの速さ）で頭打ちにする
+                walkVelocity = Vector3.ClampMagnitude(
+                    walkVelocity, Mathf.Max(runSpeed, walkVelocity.magnitude));
             }
             else
             {
