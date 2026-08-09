@@ -47,9 +47,17 @@ namespace FeelFreeFlying.EditorTools
                 return;
             }
 
-            M2TilePipeline.RegisterTilesInBuildSettings(tileScenes);
+            // 遠景タイルも入れる。**入れないと実行時に読めず、街が途切れたまま**（→ m2-plan.md §4.6）
+            string[] farScenes = Directory.Exists(M2FarTiles.FarDir)
+                ? Directory.GetFiles(M2FarTiles.FarDir, "Far_*.unity")
+                    .Select(path => path.Replace('\\', '/'))
+                    .OrderBy(path => path)
+                    .ToArray()
+                : new string[0];
 
-            string[] scenes = new[] { StreamingScene }.Concat(tileScenes).ToArray();
+            M2TilePipeline.RegisterTilesInBuildSettings(tileScenes.Concat(farScenes));
+
+            string[] scenes = new[] { StreamingScene }.Concat(tileScenes).Concat(farScenes).ToArray();
             if (!PlayerBuildUtil.BuildWindows64(scenes, OutputDir, ExecutableName))
             {
                 EditorApplication.Exit(1);

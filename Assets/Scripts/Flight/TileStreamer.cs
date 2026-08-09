@@ -36,6 +36,12 @@ namespace FeelFreeFlying.Flight
         [Tooltip("枠が埋まっている時、入れ替えに必要な距離の差 (m)。小さいと出し入れを繰り返す")]
         [SerializeField, Min(0f)] private float evictMargin = 500f;
 
+        [Tooltip("遠景タイルを置く距離 (m)。**近景だけだと街が1〜1.5kmで途切れる**（→ m2-plan.md §4.6）")]
+        [SerializeField, Min(0f)] private float farDistance = 6000f;
+
+        [Tooltip("同時に置いてよい遠景の枚数。1メッシュずつなので近景よりずっと多く置ける")]
+        [SerializeField, Min(1)] private int maxFarLoaded = 64;
+
         [Tooltip("判定の間隔 (秒)。毎フレーム全タイルを見る必要はない")]
         [SerializeField, Min(0f)] private float checkInterval = 0.25f;
 
@@ -46,6 +52,9 @@ namespace FeelFreeFlying.Flight
         [SerializeField] private bool showStatus = true;
 
         private readonly Dictionary<string, TileState> states = new Dictionary<string, TileState>();
+
+        /// <summary>置かれている遠景タイル。近景と違い出し入れが軽いので状態は持たない。</summary>
+        private readonly HashSet<string> farStates = new HashSet<string>();
         private TileCatalog catalog;
         private Vector3 previousPosition;
         private Vector3 velocity;
@@ -96,11 +105,13 @@ namespace FeelFreeFlying.Flight
             // **最初の1枚は読み終わるまで待つ。** 足元が無い状態で始まると、
             // 開始直後に空中へ放り出されたように見える
             yield return UpdateTiles(waitForFirst: true);
+            yield return UpdateFarTiles();
 
             while (true)
             {
                 yield return new WaitForSeconds(checkInterval);
                 yield return UpdateTiles(waitForFirst: false);
+                yield return UpdateFarTiles();
                 yield return ReleaseIfDue();
             }
         }
@@ -192,6 +203,46 @@ namespace FeelFreeFlying.Flight
         }
 
         /// <summary>
+        /// 遠景タイルの出し入れ（→ docs/m2-plan.md §4.6）。
+        ///
+        /// **近景が置かれているタイルには遠景を置かない。** 同じ建物が二重に描かれ、
+        /// 面が重なってちらつく。順序は**近景を置いてから遠景を外す**——逆にすると
+        /// 一瞬地面に穴が空く。1〜2フレーム重なるが、穴よりは目立たない。
+        /// </summary>
+        private IEnumerator UpdateFarTiles()
+        {
+            if (viewer == null || catalog == null) yield break;
+
+            Vector3 position = viewer.position;
+
+            foreach (TileCatalog.TileEntry entry in catalog.Tiles)
+            {
+                if (!entry.HasFar) continue;
+
+                bool nearLoaded = states.TryGetValue(entry.sceneName, out TileState nearState) &&
+                                  nearState == TileState.Loaded;
+                bool farLoaded = farStates.Contains(entry.farSceneName);
+                float distance = entry.HorizontalDistanceTo(position);
+
+                bool wanted = !nearLoaded && distance <= farDistance && farStates.Count < maxFarLoaded;
+
+                if (wanted && !farLoaded)
+                {
+                    farStates.Add(entry.farSceneName);
+                    AsyncOperation load = SceneManager.LoadSceneAsync(entry.farSceneName, LoadSceneMode.Additive);
+                    while (load != null && !load.isDone) yield return null;
+                }
+                else if (!wanted && farLoaded)
+                {
+                    farStates.Remove(entry.farSceneName);
+                    AsyncOperation unload = SceneManager.UnloadSceneAsync(entry.farSceneName);
+                    while (unload != null && !unload.isDone) yield return null;
+                    releasePending = true;
+                }
+            }
+        }
+
+        /// <summary>
         /// 溜まった破棄ぶんのメモリをまとめて返す。
         /// **1回あたり十数msかかる**ので、タイルの出し入れとは別の頻度で走らせる。
         /// </summary>
@@ -215,7 +266,7 @@ namespace FeelFreeFlying.Flight
 
             string names = string.Join(" ", states.Keys);
             GUI.Label(new Rect(24f, Screen.height - 52f, 1200f, 24f),
-                $"タイル {LoadedCount}/{TileCount}  {names}", style);
+                $"近景 {LoadedCount}/{TileCount}  遠景 {farStates.Count}  {names}", style);
         }
 
         private IEnumerator Load(TileCatalog.TileEntry entry)

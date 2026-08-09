@@ -72,6 +72,8 @@ desktop.ini
 # タイルのシーン（都市データを含む。M2: 街をタイルに割って取り込む で再生成）
 /Assets/Scenes/Tiles/
 /Assets/Scenes/Tiles.meta
+/Assets/Scenes/TilesFar/
+/Assets/Scenes/TilesFar.meta
 /Assets/Scenes/M2TileLoad.unity
 /Assets/Scenes/M2TileLoad.unity.meta
 /Assets/Scenes/M2Flight.unity

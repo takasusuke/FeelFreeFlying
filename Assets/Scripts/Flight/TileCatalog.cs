@@ -43,9 +43,15 @@ namespace FeelFreeFlying.Flight
         public sealed class TileEntry
         {
             public string sceneName;
+
+            /// <summary>遠景用の軽いシーン（→ docs/m2-plan.md §4.6）。無ければ空。</summary>
+            public string farSceneName;
+
             public string gridCode;
             public Vector3 center;
             public Vector3 size;
+
+            public bool HasFar => !string.IsNullOrEmpty(farSceneName);
 
             /// <summary>水平面での矩形。高さは見ない（上空にいても真下のタイルは要る）。</summary>
             public float HorizontalDistanceTo(Vector3 position)

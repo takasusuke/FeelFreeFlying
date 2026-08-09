@@ -249,6 +249,54 @@ namespace FeelFreeFlying.EditorTools
             await ImportFallbackInto(ScenePath, includeTexture, textureResolution, exitWhenDone);
 
         /// <summary>
+        /// 遠景用に**軽いタイル**を取り込む（docs/m2-plan.md §4.6）。
+        ///
+        /// 近景と違い、**地域単位・LOD1・建物のテクスチャ無し**。
+        /// 建物ごとに分かれている必要が無い（歩かない・ランドマークにしない・属性を引かない）ので、
+        /// 1メッシュに結合して描画呼び出しを潰す。
+        /// 地面のテクスチャだけは残す——面積が大きく、色が変わると切り替わりが目立つため。
+        ///
+        /// **地面の解像度は近景と同じ2048px。** SDKが選べるのは2048/4096/8192だけで、
+        /// それより落とす手段が無い（`TexturePackingResolution`）。
+        /// </summary>
+        public static async Task<int> ImportFarTile(string gridCode, string targetScenePath,
+            string[] allGridCodes)
+        {
+            gridCodes = new[] { gridCode };
+            referenceGridCodes = allGridCodes;
+
+            try
+            {
+                string datasetFullPath = Path.GetFullPath(DatasetPath);
+                if (!Directory.Exists(datasetFullPath))
+                {
+                    throw new DirectoryNotFoundException($"CityGMLが見つかりません: {datasetFullPath}");
+                }
+
+                Scene scene = OpenOrCreateScene(targetScenePath);
+                RemoveExistingCityModels();
+
+                await CityImporter.ImportAsync(
+                    BuildConfig(datasetFullPath, MeshGranularity.PerCityModelArea, 1, false,
+                        TexturePackingResolution.W2048H2048), null, null);
+
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene, targetScenePath);
+
+                int meshes = UnityEngine.Object.FindObjectsByType<MeshRenderer>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+
+                Debug.Log($"[M0Import] 遠景タイル: 描画対象 {meshes} 個 → {targetScenePath}");
+                return meshes;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[M0Import] 遠景タイルの取り込みに失敗: {exception}");
+                return 0;
+            }
+        }
+
+        /// <summary>
         /// LOD2優先＋LOD1補完の取り込みを、**指定したシーンへ**行う。
         /// タイル単位のパイプライン（docs/m2-plan.md §2）から1メッシュずつ呼ぶために切り出した。
         /// </summary>

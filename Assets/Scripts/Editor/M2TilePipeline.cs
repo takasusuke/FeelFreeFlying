@@ -187,9 +187,12 @@ namespace FeelFreeFlying.EditorTools
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene, scenePath);
 
+                string farPath = M2FarTiles.FarScenePath(gridCode);
+
                 entries.Add(new TileCatalog.TileEntry
                 {
                     sceneName = Path.GetFileNameWithoutExtension(scenePath),
+                    farSceneName = File.Exists(farPath) ? Path.GetFileNameWithoutExtension(farPath) : string.Empty,
                     gridCode = gridCode,
                     center = bounds.center,
                     size = bounds.size,
@@ -212,6 +215,42 @@ namespace FeelFreeFlying.EditorTools
             AssetDatabase.ImportAsset(CatalogPath);
 
             Debug.Log($"[M2Tile] 位置表: {CatalogPath} / {entries.Count} 件");
+        }
+
+        /// <summary>
+        /// 既にある位置表に、遠景タイルの名前だけを足す。
+        /// **遠景を作るたびに近景を開き直すのは高い**（1枚200MB超）ので、表だけ書き換える。
+        /// </summary>
+        public static void WriteFarNamesIntoCatalog(IEnumerable<string> gridCodes)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(CatalogPath);
+            if (asset == null)
+            {
+                Debug.LogWarning($"[M2Tile] 位置表がありません: {CatalogPath}。遠景の名前は書けません。");
+                return;
+            }
+
+            TileCatalog catalog = JsonUtility.FromJson<TileCatalog>(asset.text);
+            if (catalog == null || catalog.Tiles.Count == 0) return;
+
+            var wanted = new HashSet<string>(gridCodes);
+            int updated = 0;
+
+            foreach (TileCatalog.TileEntry entry in catalog.Tiles)
+            {
+                if (!wanted.Contains(entry.gridCode)) continue;
+
+                string farPath = M2FarTiles.FarScenePath(entry.gridCode);
+                if (!File.Exists(farPath)) continue;
+
+                entry.farSceneName = Path.GetFileNameWithoutExtension(farPath);
+                updated++;
+            }
+
+            File.WriteAllText(CatalogPath, JsonUtility.ToJson(catalog, true), new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(CatalogPath);
+
+            Debug.Log($"[M2Tile] 位置表に遠景を記録: {updated} 件");
         }
 
         /// <summary>屋上を歩くための当たり判定。**取り込み時には付けていない**（→ m0-plan.md §3）。</summary>

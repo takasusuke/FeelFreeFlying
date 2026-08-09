@@ -59,10 +59,17 @@ namespace FeelFreeFlying.EditorTools
                 return;
             }
 
-            CreateScene(radius, height);
-            M2TilePipeline.RegisterTilesInBuildSettings(tileScenes);
+            string[] farScenes = Directory.Exists(M2FarTiles.FarDir)
+                ? Directory.GetFiles(M2FarTiles.FarDir, "Far_*.unity")
+                    .Select(path => path.Replace('\\', '/'))
+                    .OrderBy(path => path)
+                    .ToArray()
+                : new string[0];
 
-            string[] scenes = new[] { BenchScene }.Concat(tileScenes).ToArray();
+            CreateScene(radius, height);
+            M2TilePipeline.RegisterTilesInBuildSettings(tileScenes.Concat(farScenes));
+
+            string[] scenes = new[] { BenchScene }.Concat(tileScenes).Concat(farScenes).ToArray();
             if (!PlayerBuildUtil.BuildWindows64(scenes, OutputDir, ExecutableName))
             {
                 EditorApplication.Exit(1);
