@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -188,6 +189,105 @@ namespace FeelFreeFlying.EditorTools
                 Debug.LogError($"[M0Import] 失敗: {exception}");
                 if (exitWhenDone) EditorApplication.Exit(1);
             }
+        }
+
+        /// <summary>
+        /// **LOD2があればLOD2、無ければLOD1**で取り込む（docs/m0-plan.md §3.3）。
+        ///
+        /// LOD2だけを指定すると、LOD2を持たない建物は**黙って消える**（新宿で625棟）。
+        /// SDKのLOD指定は範囲の下限・上限しか持たず、しかも範囲を1〜2にすると
+        /// **両方のLODが二重に生成される**ので、「建物ごとに最良のLODを選ぶ」ができない。
+        ///
+        /// そこで2回取り込む。LOD2を入れてから、LOD1を重ねて入れ、
+        /// **LOD2で既に入っている建物の複製だけを消す**。
+        ///
+        /// **主要地物単位でしか成立しない。** 地域単位はメッシュが結合済みで、
+        /// 建物ごとに残す・消すの判断ができない。
+        /// </summary>
+        public static void ImportWithLodFallbackFromCommandLine()
+        {
+            bool includeTexture = false;
+            var textureResolution = TexturePackingResolution.W2048H2048;
+
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == TextureArg) includeTexture = args[i + 1] == "on";
+                if (args[i] == TextureResolutionArg && args[i + 1] == "4096")
+                {
+                    textureResolution = TexturePackingResolution.W4096H4096;
+                }
+            }
+
+            _ = RunFallbackAsync(includeTexture, textureResolution, exitWhenDone: true);
+        }
+
+        [MenuItem("Tools/FeelFreeFlying/M2: 新宿を取り込む（LOD2 + 無ければLOD1）")]
+        public static void ImportWithLodFallback() =>
+            _ = RunFallbackAsync(false, TexturePackingResolution.W2048H2048, exitWhenDone: false);
+
+        private static async Task RunFallbackAsync(bool includeTexture,
+            TexturePackingResolution textureResolution, bool exitWhenDone)
+        {
+            try
+            {
+                string datasetFullPath = Path.GetFullPath(DatasetPath);
+                if (!Directory.Exists(datasetFullPath))
+                {
+                    throw new DirectoryNotFoundException($"CityGMLが見つかりません: {datasetFullPath}");
+                }
+
+                Scene scene = OpenBenchmarkScene();
+                RemoveExistingCityModels();
+
+                const MeshGranularity granularity = MeshGranularity.PerPrimaryFeatureObject;
+
+                Debug.Log("[M0Import] LOD2を取り込みます");
+                await CityImporter.ImportAsync(
+                    BuildConfig(datasetFullPath, granularity, 2, includeTexture, textureResolution), null, null);
+
+                var lod2Buildings = new Dictionary<string, GameObject>();
+                foreach (MeshRenderer renderer in FindBuildings()) lod2Buildings[renderer.name] = renderer.gameObject;
+                Debug.Log($"[M0Import] LOD2: {lod2Buildings.Count} 棟");
+
+                Debug.Log("[M0Import] LOD1を重ねて取り込みます（LOD2に無い建物のため）");
+                await CityImporter.ImportAsync(
+                    BuildConfig(datasetFullPath, granularity, 1, includeTexture, textureResolution), null, null);
+
+                // LOD1側の複製を消す。**LOD2で入っている建物と同じgmlIDのものだけ**
+                int duplicates = 0;
+                foreach (MeshRenderer renderer in FindBuildings())
+                {
+                    if (!lod2Buildings.TryGetValue(renderer.name, out GameObject kept)) continue;
+                    if (renderer.gameObject == kept) continue;
+
+                    UnityEngine.Object.DestroyImmediate(renderer.gameObject);
+                    duplicates++;
+                }
+
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene, ScenePath);
+
+                int total = FindBuildings().Count;
+                Debug.Log(
+                    $"[M0Import] 完了: 建物 {total} 棟（LOD2 {lod2Buildings.Count} 棟 + " +
+                    $"LOD1で補った {total - lod2Buildings.Count} 棟 / 重複削除 {duplicates} 棟）");
+
+                if (exitWhenDone) EditorApplication.Exit(0);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[M0Import] 失敗: {exception}");
+                if (exitWhenDone) EditorApplication.Exit(1);
+            }
+        }
+
+        private static List<MeshRenderer> FindBuildings()
+        {
+            return UnityEngine.Object.FindObjectsByType<MeshRenderer>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(renderer => renderer.name.StartsWith("bldg_"))
+                .ToList();
         }
 
         private static Scene OpenBenchmarkScene()
