@@ -58,6 +58,74 @@ namespace FeelFreeFlying.EditorTools
             }
         }
 
+        /// <summary>
+        /// ランドマークが**実際にテクスチャを持っているか**を数える。
+        ///
+        /// 「実写のまま残した」とログに出しても、元の建物がテクスチャを持っていなければ
+        /// 何も残っていない。**LOD2に無い建物はLOD1で補完している**（→ `m0-plan.md` §3.3）ので、
+        /// 郊外のタイルほどテクスチャの無いランドマークが混ざる。
+        ///
+        ///   Unity.exe -projectPath . -batchmode -quit -logFile &lt;ログ&gt; `
+        ///     -executeMethod FeelFreeFlying.EditorTools.M2Landmarks.VerifyTextures
+        /// </summary>
+        [MenuItem("Tools/FeelFreeFlying/M2: ランドマークのテクスチャを数える")]
+        public static void VerifyTextures()
+        {
+            HashSet<string> landmarks = SelectLandmarks(out _, out _);
+            if (landmarks.Count == 0) { EditorApplication.Exit(1); return; }
+
+            int withTexture = 0;
+            int without = 0;
+
+            foreach (string tileName in CountPerTile(landmarks).Keys.OrderBy(name => name))
+            {
+                string scenePath = $"{M2TilePipeline.TileDir}/{tileName}.unity";
+                EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+
+                int tileWith = 0;
+                int tileWithout = 0;
+
+                foreach (MeshRenderer renderer in UnityEngine.Object.FindObjectsByType<MeshRenderer>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (!landmarks.Contains(renderer.name)) continue;
+
+                    if (HasTexture(renderer)) tileWith++;
+                    else tileWithout++;
+                }
+
+                withTexture += tileWith;
+                without += tileWithout;
+
+                Debug.Log($"[M2Landmark] {tileName}: テクスチャあり {tileWith} 棟 / 無し {tileWithout} 棟");
+            }
+
+            Debug.Log($"[M2Landmark] 合計: テクスチャあり {withTexture} 棟 / 無し {without} 棟");
+            EditorApplication.Exit(0);
+        }
+
+        private static bool HasTexture(Renderer renderer)
+        {
+            foreach (Material material in renderer.sharedMaterials)
+            {
+                if (material == null) continue;
+
+                foreach (string property in material.GetTexturePropertyNames())
+                {
+                    Texture texture = material.GetTexture(property);
+
+                    // SDK同梱の汎用テクスチャはアセットとして存在する。**実写は
+                    // シーンに埋め込まれる**ので、アセットパスの有無で見分ける
+                    if (texture != null && string.IsNullOrEmpty(AssetDatabase.GetAssetPath(texture)))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         private static async Task ApplyAsync(bool exitWhenDone)
         {
             try
