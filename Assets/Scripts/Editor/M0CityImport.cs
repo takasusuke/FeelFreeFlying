@@ -50,8 +50,12 @@ namespace FeelFreeFlying.EditorTools
         /// <summary>平面直角座標系9系（東京）。</summary>
         private const int CoordinateZoneId = 9;
 
-        /// <summary>建築物のLOD。LOD0は底面ポリゴンで箱にならない（→ §3）。</summary>
-        private const int DefaultBuildingLod = 1;
+        /// <summary>
+        /// 建築物のLOD。**形状はLOD2を使う**（`requirements.md` §5・2026-08-09決定）。
+        /// LOD1は箱、LOD0は底面ポリゴンで箱にすらならない。
+        /// 実写テクスチャは使わないので<see cref="Run"/>のincludeTextureは既定でfalseのまま。
+        /// </summary>
+        private const int DefaultBuildingLod = 2;
 
         private const string ScenePath = "Assets/Scenes/M0Benchmark.unity";
         private const string GranularityArg = "-ffimport-granularity";
