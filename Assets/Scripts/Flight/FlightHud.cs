@@ -40,6 +40,7 @@ namespace FeelFreeFlying.Flight
             EnsureStyles();
             DrawSpeedAndAltitude();
             if (showCompass) DrawCompass();
+            DrawNotice();
             if (showHints) DrawHints();
         }
 
@@ -144,12 +145,33 @@ namespace FeelFreeFlying.Flight
             }
         }
 
+        /// <summary>着地の成否など、その場で伝えたい1行。数秒で消す。</summary>
+        private void DrawNotice()
+        {
+            if (string.IsNullOrEmpty(target.Notice)) return;
+            if (Time.time - target.NoticeTime > 3f) return;
+
+            var area = new Rect(0f, Screen.height * 0.42f, Screen.width, 40f);
+            GUI.Label(area, target.Notice, compassStyle);
+        }
+
         private void DrawHints()
         {
             bool pad = input != null && input.UsingGamepad;
-            string hints = pad
-                ? "左スティック: 傾ける / トリガー: 加減速 / A: ブースト / B: 水平 / Y: 視点 / SELECT: やり直す / Esc: カーソルを返す"
-                : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / ↑↓: 機首 / Shift: ブースト / Space: 水平 / C: 視点 / R: やり直す / Esc: カーソルを返す";
+
+            string hints;
+            if (target.IsWalking)
+            {
+                hints = pad
+                    ? "左スティック: 歩く / 右スティック: 見回す / A: 走る / B: ジャンプ / X: 飛び立つ / Y: 視点 / Esc: カーソルを返す"
+                    : "W A S D: 歩く / マウス: 見回す / Shift: 走る / Space: ジャンプ / F: 飛び立つ / C: 視点 / Esc: カーソルを返す";
+            }
+            else
+            {
+                hints = pad
+                    ? "左スティック: 傾ける / トリガー: 加減速 / A: ブースト / B: 水平 / X: 着地 / Y: 視点 / 十字上: 上下反転 / SELECT: やり直す"
+                    : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / Space: 水平 / F: 着地 / C: 視点 / I: 上下反転 / R: やり直す / Esc: カーソルを返す";
+            }
 
             if (input != null && !input.CursorCaptured)
             {

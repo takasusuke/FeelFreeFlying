@@ -58,6 +58,7 @@ namespace FeelFreeFlying.EditorTools
             Bounds cityBounds = CalculateCityBounds();
             RemoveBenchmarkRig();
 
+            int colliders = AddCityColliders();
             CreateOcean(cityBounds);
 
             // 街（灰色）に対して沈まない明るさにする。暗い色だと自分の姿を見失う
@@ -76,7 +77,7 @@ namespace FeelFreeFlying.EditorTools
             Debug.Log(
                 $"[M1Setup] 作成: {FlightScene}\n" +
                 $"[M1Setup] 街の広がり: {cityBounds.size.x:F0} x {cityBounds.size.z:F0} m / " +
-                $"開始地点: {craft.transform.position}");
+                $"開始地点: {craft.transform.position} / 当たり判定: {colliders} 件");
         }
 
         /// <summary>街の範囲。開始地点を街に対して決めるために使う。</summary>
@@ -105,6 +106,35 @@ namespace FeelFreeFlying.EditorTools
             {
                 Object.DestroyImmediate(path.gameObject);
             }
+        }
+
+        /// <summary>
+        /// 都市に当たり判定を付ける。**屋上を歩くために要る。**
+        ///
+        /// インポート時はMesh Colliderを付けていない（飛ぶだけなら不要で、メモリと生成時間が増える
+        /// → `m0-plan.md` §3）。歩けるようにする分だけここで付ける。
+        /// **地域単位で取り込んでいれば数個で済む**（主要地物単位だと8千個を超えるので、
+        /// その粒度で歩かせたくなったら別の手が要る）。
+        ///
+        /// 飛行中は当たり判定を無視する（機体側のCharacterControllerを切ってある）ので、
+        /// 建物をすり抜けて飛ぶ挙動は変わらない。
+        /// </summary>
+        private static int AddCityColliders()
+        {
+            int count = 0;
+
+            foreach (MeshFilter filter in Object.FindObjectsByType<MeshFilter>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (filter.sharedMesh == null) continue;
+                if (filter.GetComponent<MeshCollider>() != null) { count++; continue; }
+
+                var collider = filter.gameObject.AddComponent<MeshCollider>();
+                collider.sharedMesh = filter.sharedMesh;
+                count++;
+            }
+
+            return count;
         }
 
         /// <summary>
@@ -156,6 +186,15 @@ namespace FeelFreeFlying.EditorTools
             flyer.transform.SetPositionAndRotation(start, Quaternion.identity); // 街の方（+Z）を向く
 
             flyer.AddComponent<FlightInput>();
+
+            // 歩行時だけ有効にする当たり判定。飛行中は切ってあるので建物をすり抜ける
+            CharacterController walker = flyer.AddComponent<CharacterController>();
+            walker.radius = 0.35f;
+            walker.height = 1.7f;
+            walker.center = Vector3.zero;
+            walker.slopeLimit = 50f;
+            walker.stepOffset = 0.4f;
+
             flyer.AddComponent<FlightController>();
 
             var alongZ = new Vector3(90f, 0f, 0f); // カプセルの軸をY（既定）から進行方向Zへ倒す

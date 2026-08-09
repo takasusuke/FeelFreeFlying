@@ -33,6 +33,42 @@ namespace FeelFreeFlying.EditorTools
 
         private const float PreviewAltitude = 165f;
 
+        /// <summary>
+        /// 屋上に降りた時の絵を出す。**当たり判定が実際に効いているかの確認も兼ねる**
+        /// （レイが何にも当たらなければ、着地はゲーム中でも失敗する）。
+        /// </summary>
+        [MenuItem("Tools/FeelFreeFlying/M1: 屋上に降りた絵を書き出す")]
+        public static void CaptureRooftop()
+        {
+            EditorSceneManager.OpenScene(FlightScene, OpenSceneMode.Single);
+
+            var flyer = Object.FindFirstObjectByType<FlightController>();
+            var camera = Object.FindFirstObjectByType<FlightCamera>();
+            if (flyer == null || camera == null)
+            {
+                Debug.LogError("[M1Preview] 機体かカメラが見つかりません。");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            Bounds city = CalculateCityBounds();
+            var origin = new Vector3(city.center.x, city.max.y + 50f, city.center.z);
+
+            if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 2000f))
+            {
+                Debug.LogError("[M1Preview] 真下に当たり判定がありません。**着地は機能しません。**");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            Debug.Log($"[M1Preview] 着地点: {hit.collider.name} 高度 {hit.point.y:F1} m");
+
+            flyer.transform.SetPositionAndRotation(
+                hit.point + Vector3.up * 0.9f, Quaternion.Euler(4f, 25f, 0f));
+
+            RenderToFile(camera, ResolveOutputPath());
+        }
+
         [MenuItem("Tools/FeelFreeFlying/M1: 見た目を画像に書き出す")]
         public static void Capture()
         {
@@ -54,10 +90,14 @@ namespace FeelFreeFlying.EditorTools
                 new Vector3(city.center.x, PreviewAltitude, city.center.z - PreviewDistance),
                 Quaternion.Euler(-6f, 0f, 12f)); // 少し機首を上げ、傾けた姿勢のほうが姿が分かる
 
+            RenderToFile(camera, ResolveOutputPath());
+        }
+
+        private static void RenderToFile(FlightCamera camera, string path)
+        {
             var cameraComponent = camera.GetComponent<Camera>();
             camera.SnapToTarget();
 
-            string path = ResolveOutputPath();
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
 
             var renderTexture = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32)

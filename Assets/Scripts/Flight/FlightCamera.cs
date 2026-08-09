@@ -27,7 +27,11 @@ namespace FeelFreeFlying.Flight
         [SerializeField] private FlightController target;
 
         [Header("視点")]
-        [SerializeField] private ViewMode mode = ViewMode.ThirdPerson;
+        [Tooltip("既定は一人称。試遊の結果、そちらのほうが飛んでいる感じが強いと判断した")]
+        [SerializeField] private ViewMode mode = ViewMode.FirstPerson;
+
+        [Tooltip("一人称のとき自分の身体を消す。**残すと視界の中央を塞ぐ**")]
+        [SerializeField] private bool hideBodyInFirstPerson = true;
 
         [Header("三人称")]
         [Tooltip("機体から見た定位置。zが後ろ、yが上。" +
@@ -51,8 +55,11 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Min(0.01f)] private float thirdPersonNearClip = 1f;
 
         [Header("一人称")]
-        [Tooltip("頭の位置（機体ローカル）。前に出しすぎると自分の腕が見えなくなる")]
-        [SerializeField] private Vector3 firstPersonOffset = new Vector3(0f, 0.14f, 0.62f);
+        [Tooltip("飛行中の目の位置（機体ローカル）。身体は消すので、頭より少し前に出す")]
+        [SerializeField] private Vector3 firstPersonOffset = new Vector3(0f, 0.16f, 0.75f);
+
+        [Tooltip("歩行中の目の位置。立っている姿勢なので目線が上がる")]
+        [SerializeField] private Vector3 walkFirstPersonOffset = new Vector3(0f, 0.72f, 0.12f);
 
         [Tooltip("一人称でのロールの反映。三人称より強めでないと身体と視界がずれる")]
         [SerializeField, Range(0f, 1f)] private float firstPersonRollInfluence = 0.7f;
@@ -71,6 +78,7 @@ namespace FeelFreeFlying.Flight
 
         private Camera cameraComponent;
         private Vector3 followVelocity;
+        private Renderer[] bodyRenderers;
 
         /// <summary>いまの視点。HUDの表示に使う。</summary>
         public ViewMode Mode => mode;
@@ -79,8 +87,28 @@ namespace FeelFreeFlying.Flight
         {
             cameraComponent = GetComponent<Camera>();
             if (target == null) target = FindFirstObjectByType<FlightController>();
+            if (target != null) bodyRenderers = target.GetComponentsInChildren<Renderer>(true);
+
             ApplyNearClip();
+            ApplyBodyVisibility();
             if (target != null) SnapToTarget();
+        }
+
+        /// <summary>
+        /// 一人称のとき自分の姿を消す。
+        ///
+        /// 腕が見えるほうが身体で飛んでいる感じが出ると考えて最初は残していたが、
+        /// **実際には視界の中央を塞いで街が見えなくなった。** 姿は三人称で見えれば足りる。
+        /// </summary>
+        private void ApplyBodyVisibility()
+        {
+            if (bodyRenderers == null) return;
+
+            bool visible = !(hideBodyInFirstPerson && mode == ViewMode.FirstPerson);
+            foreach (Renderer renderer in bodyRenderers)
+            {
+                if (renderer != null) renderer.enabled = visible;
+            }
         }
 
         private void LateUpdate()
@@ -91,6 +119,7 @@ namespace FeelFreeFlying.Flight
             {
                 mode = mode == ViewMode.ThirdPerson ? ViewMode.FirstPerson : ViewMode.ThirdPerson;
                 ApplyNearClip();
+                ApplyBodyVisibility();
                 SnapToTarget();
             }
 
@@ -119,7 +148,7 @@ namespace FeelFreeFlying.Flight
         private void UpdateFirstPerson(float dt)
         {
             Transform craft = target.transform;
-            Vector3 desired = craft.TransformPoint(firstPersonOffset);
+            Vector3 desired = craft.TransformPoint(EyeOffset);
             Quaternion desiredRotation = Basis(firstPersonRollInfluence);
 
             if (firstPersonSmoothing <= 0f)
@@ -132,6 +161,9 @@ namespace FeelFreeFlying.Flight
             transform.position = Vector3.Lerp(transform.position, desired, t);
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, t);
         }
+
+        /// <summary>目の位置。飛行と歩行で姿勢が違うので分ける。</summary>
+        private Vector3 EyeOffset => target.IsWalking ? walkFirstPersonOffset : firstPersonOffset;
 
         /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。</summary>
         private Quaternion Basis(float roll)
@@ -163,7 +195,7 @@ namespace FeelFreeFlying.Flight
             if (mode == ViewMode.FirstPerson)
             {
                 transform.SetPositionAndRotation(
-                    craft.TransformPoint(firstPersonOffset), Basis(firstPersonRollInfluence));
+                    craft.TransformPoint(EyeOffset), Basis(firstPersonRollInfluence));
             }
             else
             {
