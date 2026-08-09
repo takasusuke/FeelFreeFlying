@@ -163,8 +163,8 @@ namespace FeelFreeFlying.Flight
             if (target.IsWalking)
             {
                 hints = pad
-                    ? "左スティック: 歩く / 右スティック: 見回す / A: 走る / B: ジャンプ / X: 飛び立つ / Y: 視点 / Esc: カーソルを返す"
-                    : "W A S D: 歩く / マウス: 見回す / Shift: 走る / Space: ジャンプ / F: 飛び立つ / C: 視点 / Esc: カーソルを返す";
+                    ? "左スティック: 歩く / A: ダッシュ / B: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / X: 飛び立つ / Y: 視点"
+                    : "W A S D: 歩く / Shift: ダッシュ / Space: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / F: 飛び立つ / C: 視点 / Esc: カーソル";
             }
             else
             {

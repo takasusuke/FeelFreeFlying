@@ -247,6 +247,12 @@ namespace FeelFreeFlying.EditorTools
                 packageConfig.DoSetMeshCollider = false;   // 飛ぶだけなので不要
                 packageConfig.DoSetAttrInfo = false;       // **オンにするとインポートが壊れる（→ §3.1）**
 
+                // 地面（土地起伏）は航空写真（地理院タイル）を貼る。無地の地面だと現実感が出ず、
+                // 公園（新宿御苑）が建物の隙間の空白にしか見えない。
+                // SDKの既定でタイルが付く設定になっているので、**テクスチャを有効にするだけでよい**。
+                // **出典表示が要る**（国土地理院 → requirements.md §4.2）
+                if (package == PredefinedCityModelPackage.Relief) packageConfig.IncludeTexture = true;
+
                 if (package != PredefinedCityModelPackage.Building) continue;
 
                 // 土地起伏はLOD0しか無いので、LODを固定するのは建築物だけ

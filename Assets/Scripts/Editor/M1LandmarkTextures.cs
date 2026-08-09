@@ -23,21 +23,23 @@ namespace FeelFreeFlying.EditorTools
     public static class M1LandmarkTextures
     {
         private const string ScenePath = "Assets/Scenes/M0Benchmark.unity";
-        private const string StylizedMaterialPath = "Assets/Settings/Rendering/StylizedBuilding.mat";
         private const string CountArg = "-fflandmarks";
-        private const int DefaultLandmarkCount = 15;
+        private const int DefaultLandmarkCount = 40;
 
         /// <summary>この高さ以下は、上位に入っても対象にしない (m)。</summary>
-        private const float MinimumLandmarkHeight = 60f;
+        private const float MinimumLandmarkHeight = 40f;
 
         [MenuItem("Tools/FeelFreeFlying/M1: ランドマークだけ実写テクスチャにする")]
         public static void Apply()
         {
             Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
+            // **建物だけを対象にする。** 地形（dem_*）まで差し替えると、地面に貼られている
+            // 航空写真（地理院タイル）が無地になり、公園も道路も見えなくなる（一度やった）
             var buildings = Object.FindObjectsByType<MeshRenderer>(
                     FindObjectsInactive.Include, FindObjectsSortMode.None)
                 .Where(renderer => renderer.GetComponent<MeshFilter>() != null)
+                .Where(renderer => renderer.name.StartsWith("bldg_"))
                 .ToList();
 
             if (buildings.Count < 100)
@@ -60,7 +62,7 @@ namespace FeelFreeFlying.EditorTools
                 .Take(count)
                 .ToList();
 
-            Material stylized = LoadOrCreateStylizedMaterial();
+            Material stylized = LoadGenericBuildingMaterial();
             var landmarkSet = new HashSet<MeshRenderer>(landmarks);
             int replaced = 0;
 
@@ -99,7 +101,14 @@ namespace FeelFreeFlying.EditorTools
         private static int DiscardUnreferencedTextures(IEnumerable<MeshRenderer> landmarks)
         {
             var keep = new HashSet<Texture>();
-            foreach (MeshRenderer landmark in landmarks)
+
+            // 建物以外（地形の航空写真など）が持つテクスチャは捨てない
+            IEnumerable<MeshRenderer> keepAll = Object.FindObjectsByType<MeshRenderer>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(renderer => !renderer.name.StartsWith("bldg_"))
+                .Concat(landmarks);
+
+            foreach (MeshRenderer landmark in keepAll)
             {
                 foreach (Material material in landmark.sharedMaterials)
                 {
@@ -139,24 +148,26 @@ namespace FeelFreeFlying.EditorTools
         }
 
         /// <summary>
-        /// 差し替え先の仮マテリアル。**様式化そのものはM5の課題**なので、
-        /// ここでは「実写ではない」ことだけ満たす無地にしておく。
+        /// ランドマーク以外に貼るマテリアル。**SDKのフォールバック（汎用の外壁テクスチャ）を使う。**
+        ///
+        /// 最初は無地の白にしていたが、実写のランドマークと並ぶと**そこだけ写真が浮いて見えた**。
+        /// 窓や外壁の模様が入っているだけで馴染む。汎用テクスチャはパッケージ側のアセットなので、
+        /// 何棟に貼ってもビルド容量は増えない（実写テクスチャはシーンに埋め込まれるので増える）。
+        ///
+        /// 様式化そのものはM5の課題。ここでは「実写ではない」「浮かない」を満たせば足りる。
         /// </summary>
-        private static Material LoadOrCreateStylizedMaterial()
+        private static Material LoadGenericBuildingMaterial()
         {
-            var existing = AssetDatabase.LoadAssetAtPath<Material>(StylizedMaterialPath);
-            if (existing != null) return existing;
+            Material fallback = PLATEAU.Util.FallbackMaterial.LoadByPackage(
+                PLATEAU.Dataset.PredefinedCityModelPackage.Building);
 
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            var material = new Material(shader)
+            if (fallback != null) return fallback;
+
+            Debug.LogWarning("[M1Landmark] SDKのフォールバックマテリアルが見つかりません。無地で代用します。");
+            return new Material(Shader.Find("Universal Render Pipeline/Lit"))
             {
                 color = new Color(0.78f, 0.78f, 0.80f),
             };
-            material.SetFloat("_Smoothness", 0.15f);
-
-            AssetDatabase.CreateAsset(material, StylizedMaterialPath);
-            AssetDatabase.SaveAssets();
-            return material;
         }
     }
 }

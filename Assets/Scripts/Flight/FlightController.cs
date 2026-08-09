@@ -92,9 +92,24 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Min(1f)] private float landingRayLength = 400f;
 
         [SerializeField, Min(0.5f)] private float walkSpeed = 4.5f;
-        [SerializeField, Min(0.5f)] private float runSpeed = 8.5f;
-        [SerializeField, Min(1f)] private float jumpSpeed = 6.5f;
+
+        [Tooltip("ダッシュ。屋上から屋上へ助走をつけて跳べる速さにしてある")]
+        [SerializeField, Min(0.5f)] private float runSpeed = 11f;
+
+        [SerializeField, Min(1f)] private float jumpSpeed = 7f;
         [SerializeField, Min(1f)] private float gravity = 22f;
+
+        [Header("パルクール")]
+        [Tooltip("空中でもう一度跳べる回数")]
+        [SerializeField, Min(0)] private int airJumpsMax = 1;
+
+        [SerializeField, Min(1f)] private float airJumpSpeed = 6f;
+
+        [Tooltip("壁に触れながらジャンプを押し続けると駆け上がる速さ (m/s)")]
+        [SerializeField, Min(0f)] private float wallRunSpeed = 7f;
+
+        [Tooltip("駆け上がれる時間 (秒)。これを過ぎたら落ちる")]
+        [SerializeField, Min(0f)] private float wallRunSeconds = 1.1f;
 
         [Tooltip("歩行時の視線の速さ (度/秒)")]
         [SerializeField, Min(1f)] private float lookRate = 130f;
@@ -110,6 +125,9 @@ namespace FeelFreeFlying.Flight
         private float yawDegrees;
         private float speed;
         private float verticalVelocity;
+        private int airJumpsUsed;
+        private float wallRunRemaining;
+        private bool jumpHeldLastFrame;
 
         private Vector3 startPosition;
         private float startYaw;
@@ -321,15 +339,23 @@ namespace FeelFreeFlying.Flight
             ShowNotice($"着地（高度 {hit.point.y:F0} m）");
         }
 
-        /// <summary>その場から飛び立つ。</summary>
+        /// <summary>
+        /// その場から飛び立つ。
+        ///
+        /// **視線を動かさない。** 落下中に飛行へ切り替えた時、機首を既定の角度に立て直すと
+        /// 見ていた景色が飛んで「操作を取り上げられた」感覚になる。押した瞬間に見ている方向を
+        /// そのまま進行方向にする。
+        /// </summary>
         private void Launch()
         {
             Mode = MotionMode.Flying;
             if (body != null) body.enabled = collideWhileFlying;
 
-            pitchDegrees = launchPitch;
+            pitchDegrees = Mathf.Clamp(pitchDegrees, -pitchLimit, pitchLimit);
             rollDegrees = 0f;
-            speed = launchSpeed;
+
+            // 落下の勢いは活かす。止まってから飛び出すと重く感じる
+            speed = Mathf.Max(launchSpeed, speed);
             verticalVelocity = 0f;
 
             input?.ClearAim();
@@ -352,14 +378,32 @@ namespace FeelFreeFlying.Flight
             Vector3 horizontal = heading * new Vector3(move.x, 0f, move.y) *
                                  (state.Boost ? runSpeed : walkSpeed);
 
+            bool jumpPressed = state.LevelOrJump && !jumpHeldLastFrame;
+            jumpHeldLastFrame = state.LevelOrJump;
+
             if (body.isGrounded)
             {
                 verticalVelocity = -2f; // 接地を維持する程度に押し付ける
-                if (state.LevelOrJump) verticalVelocity = jumpSpeed;
+                airJumpsUsed = 0;
+                wallRunRemaining = wallRunSeconds;
+                if (jumpPressed) verticalVelocity = jumpSpeed;
+            }
+            else if (CanWallRun(state, jumpHeldLastFrame))
+            {
+                // 壁走り。壁に触れながらジャンプを押し続けている間だけ上がる
+                verticalVelocity = wallRunSpeed;
+                wallRunRemaining -= dt;
             }
             else
             {
                 verticalVelocity -= gravity * dt;
+
+                // 二段ジャンプ。屋上から屋上へ届かなかった時の救済でもある
+                if (jumpPressed && airJumpsUsed < airJumpsMax)
+                {
+                    verticalVelocity = airJumpSpeed;
+                    airJumpsUsed++;
+                }
             }
 
             body.Move((horizontal + Vector3.up * verticalVelocity) * dt);
@@ -367,6 +411,19 @@ namespace FeelFreeFlying.Flight
 
             // 海へ落ちても死なせない。沈む前に飛行へ戻す（→ CLAUDE.md 不変条件3）
             if (transform.position.y < seaLevel + altitudeAboveSeaMin) Launch();
+        }
+
+        /// <summary>
+        /// 壁を駆け上がれるか。**壁に押し当てながらジャンプを押し続ける**のが条件。
+        /// 屋上から屋上へ移る時に、届かない縁を登れると移動が途切れない。
+        /// </summary>
+        private bool CanWallRun(FlightInputState state, bool jumpHeld)
+        {
+            if (!jumpHeld || wallRunSeconds <= 0f || wallRunRemaining <= 0f) return false;
+            if ((body.collisionFlags & CollisionFlags.Sides) == 0) return false;
+
+            // 壁へ向かって進もうとしている時だけ。触れただけで登り始めると事故になる
+            return (state.Keys + state.LeftStick).sqrMagnitude > 0.01f;
         }
 
         // ------------------------------------------------------------------ 共通
