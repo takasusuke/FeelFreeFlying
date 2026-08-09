@@ -92,6 +92,10 @@ namespace FeelFreeFlying.Flight
         /// <summary>視点のずれ（x=ヨー, y=ピッチ）。戻すまで保持する。</summary>
         private Vector2 look;
 
+        /// <summary>前フレームの機体の向き。回った角度を打ち消すために持つ。</summary>
+        private float previousYaw;
+        private float previousPitch;
+
         /// <summary>いまの視点。HUDの表示に使う。</summary>
         public ViewMode Mode => mode;
 
@@ -103,7 +107,13 @@ namespace FeelFreeFlying.Flight
 
             ApplyNearClip();
             ApplyBodyVisibility();
-            if (target != null) SnapToTarget();
+
+            if (target != null)
+            {
+                previousYaw = target.transform.eulerAngles.y;
+                previousPitch = target.PitchDegrees;
+                SnapToTarget();
+            }
         }
 
         /// <summary>
@@ -184,16 +194,39 @@ namespace FeelFreeFlying.Flight
         ///
         /// **スティックを戻しても視点は戻さない。** 自動で正面へ戻すと、
         /// 「高度を保ったまま下を見続ける」ができない。正面に戻したい時はR3で明示的に戻す。
+        ///
+        /// 視点のずれは機体からの相対だが、**機体が回った角度ぶんを引いて世界に対して固定する**。
+        /// そうしないと、右を見ながら右へ旋回した時に視界も一緒に右へ流れて、
+        /// 「さっき見ていた方へ進む」ができない。旋回すると機体が視線に追いついてきて、
+        /// ずれが自然に0へ近づく。
         /// </summary>
         private void UpdateLook(float dt)
         {
+            float yawNow = target.transform.eulerAngles.y;
+            float pitchNow = target.PitchDegrees;
+
+            // 歩行中は視点がそのまま身体の向きなので、打ち消しも保持もしない
+            if (target.IsWalking)
+            {
+                look = Vector2.zero;
+                previousYaw = yawNow;
+                previousPitch = pitchNow;
+                return;
+            }
+
             if (target.ConsumeRecenterView()) look = Vector2.zero;
 
-            Vector2 input = target.LookInput;
-            if (input.sqrMagnitude <= 0.0001f) return;
+            look.x -= Mathf.DeltaAngle(previousYaw, yawNow);
+            look.y -= pitchNow - previousPitch;
+            previousYaw = yawNow;
+            previousPitch = pitchNow;
 
-            look.x = Mathf.Clamp(look.x + input.x * lookRate * dt, -lookYawRange, lookYawRange);
-            look.y = Mathf.Clamp(look.y + input.y * lookRate * dt, -lookPitchRange, lookPitchRange);
+            Vector2 input = target.LookInput;
+            look.x += input.x * lookRate * dt;
+            look.y += input.y * lookRate * dt;
+
+            look.x = Mathf.Clamp(look.x, -lookYawRange, lookYawRange);
+            look.y = Mathf.Clamp(look.y, -lookPitchRange, lookPitchRange);
         }
 
         /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。視点のずれを最後に足す。</summary>
