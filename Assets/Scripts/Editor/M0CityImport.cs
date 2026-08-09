@@ -42,11 +42,14 @@ namespace FeelFreeFlying.EditorTools
         /// 新宿駅周辺の3次メッシュ4枚（約2km四方）。**粒度を比較する以上、範囲は固定でなければならない。**
         /// 広げると主要地物単位でUnityが落ちる（6.4 x 6.8kmで異常終了した）。
         /// </summary>
-        private static readonly string[] GridCodes =
+        private static readonly string[] DefaultGridCodes =
         {
             "53394525", "53394526",
             "53394535", "53394536",
         };
+
+        /// <summary>取り込む範囲。`-ffimport-grid` で上書きできる（範囲の限界を測るため）。</summary>
+        private static string[] gridCodes = DefaultGridCodes;
 
         /// <summary>平面直角座標系9系（東京）。</summary>
         private const int CoordinateZoneId = 9;
@@ -63,6 +66,7 @@ namespace FeelFreeFlying.EditorTools
         private const string LodArg = "-ffimport-lod";
         private const string TextureArg = "-ffimport-texture";
         private const string TextureResolutionArg = "-ffimport-texres";
+        private const string GridArg = "-ffimport-grid";
 
         [MenuItem("Tools/FeelFreeFlying/M0: 新宿を取り込む（主要地物単位）")]
         public static void ImportPerPrimaryFeature() =>
@@ -169,7 +173,7 @@ namespace FeelFreeFlying.EditorTools
                 CityImportConfig config = BuildConfig(datasetFullPath, granularity, lod, includeTexture, textureResolution);
                 Debug.Log(
                     $"[M0Import] 開始: 粒度={granularity} / LOD={lod} / テクスチャ={(includeTexture ? "あり" : "なし")} / " +
-                    $"メッシュコード={string.Join(",", GridCodes)}");
+                    $"メッシュコード={string.Join(",", gridCodes)}");
 
                 await CityImporter.ImportAsync(config, null, null);
 
@@ -212,6 +216,7 @@ namespace FeelFreeFlying.EditorTools
             string[] args = Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
             {
+                if (args[i] == GridArg) gridCodes = args[i + 1].Split(',');
                 if (args[i] == TextureArg) includeTexture = args[i + 1] == "on";
                 if (args[i] == TextureResolutionArg && args[i + 1] == "4096")
                 {
@@ -317,12 +322,12 @@ namespace FeelFreeFlying.EditorTools
             int buildingLod, bool includeTexture, TexturePackingResolution textureResolution)
         {
             var datasetConfig = new DatasetSourceConfigLocal(datasetFullPath);
-            GridCodeList gridCodes = GridCodeList.CreateFromGridCodesStr(GridCodes);
+            GridCodeList codes = GridCodeList.CreateFromGridCodesStr(gridCodes);
 
             var config = CityImportConfig.CreateWithAreaSelectResult(
                 new AreaSelectResult(
                     new ConfigBeforeAreaSelect(datasetConfig, CoordinateZoneId),
-                    gridCodes,
+                    codes,
                     AreaSelectResult.ResultReason.Confirm));
 
             foreach (var pair in config.PackageImportConfigDict.ForEachPackagePair.ToArray())
