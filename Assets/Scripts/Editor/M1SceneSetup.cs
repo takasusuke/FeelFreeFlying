@@ -68,7 +68,18 @@ namespace FeelFreeFlying.EditorTools
             SetUpCamera(craft.GetComponent<FlightController>());
 
             var hud = new GameObject("FlightHud");
-            hud.AddComponent<FlightHud>();
+            FlightHud hudComponent = hud.AddComponent<FlightHud>();
+
+            // 起動画面。STARTを押すまで操作系を止める。出典表示もここに出す（不変条件5）
+            var title = new GameObject("TitleScreen");
+            TitleScreen titleScreen = title.AddComponent<TitleScreen>();
+
+            var titleSerialized = new SerializedObject(titleScreen);
+            titleSerialized.FindProperty("controller").objectReferenceValue =
+                craft.GetComponent<FlightController>();
+            titleSerialized.FindProperty("input").objectReferenceValue = craft.GetComponent<FlightInput>();
+            titleSerialized.FindProperty("hud").objectReferenceValue = hudComponent;
+            titleSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, FlightScene);
