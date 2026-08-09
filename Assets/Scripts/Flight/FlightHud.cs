@@ -29,6 +29,7 @@ namespace FeelFreeFlying.Flight
         private GUIStyle travelStyle;
         private Transform viewTransform;
         private FlightCamera view;
+        private Camera viewCamera;
 
         private void Awake()
         {
@@ -37,7 +38,11 @@ namespace FeelFreeFlying.Flight
 
             // 方位帯は「見ている方向」を指すので、機体ではなくカメラの向きを読む
             view = FindFirstObjectByType<FlightCamera>();
-            if (view != null) viewTransform = view.transform;
+            if (view != null)
+            {
+                viewTransform = view.transform;
+                viewCamera = view.GetComponent<Camera>();
+            }
         }
 
         private void OnGUI()
@@ -47,6 +52,7 @@ namespace FeelFreeFlying.Flight
             EnsureStyles();
             DrawSpeedAndAltitude();
             if (showCompass) DrawCompass();
+            DrawLandingMarker();
             DrawNotice();
             if (showHints) DrawHints();
         }
@@ -176,6 +182,24 @@ namespace FeelFreeFlying.Flight
                 : "▲ 進行方向";
 
             GUI.Label(new Rect(x - 60f, area.yMax + 2f, 120f, 24f), mark, travelStyle);
+        }
+
+        /// <summary>
+        /// 落下中の着地点。**どこに降りるかが見えないと、屋上を狙うことが運になる。**
+        /// 予測は入力を見込まないので、動かせばずれる——手を離した時の落下先の目安。
+        /// </summary>
+        private void DrawLandingMarker()
+        {
+            if (viewCamera == null || !target.TryPredictLanding(out Vector3 point)) return;
+
+            Vector3 screen = viewCamera.WorldToScreenPoint(point);
+            if (screen.z <= 0f) return; // 背後
+
+            float distance = Vector3.Distance(target.transform.position, point);
+            float y = Screen.height - screen.y; // IMGUIは上下が逆
+
+            GUI.Label(new Rect(screen.x - 60f, y - 14f, 120f, 28f), "◎", travelStyle);
+            GUI.Label(new Rect(screen.x - 60f, y + 8f, 120f, 24f), $"{distance:F0} m", travelStyle);
         }
 
         private static string DirectionLabel(int degrees)

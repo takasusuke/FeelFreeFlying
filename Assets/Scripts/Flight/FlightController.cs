@@ -137,6 +137,13 @@ namespace FeelFreeFlying.Flight
         [Tooltip("急降下（○ / 左Ctrl）の落下速度 (m/s)。慣性を消して真下へ落ちる")]
         [SerializeField, Min(1f)] private float dropSpeed = 38f;
 
+        [Header("着地点の予測")]
+        [Tooltip("弾道を刻む間隔 (秒)")]
+        [SerializeField, Range(0.02f, 0.2f)] private float predictionStep = 0.06f;
+
+        [Tooltip("何回先まで見るか。間隔×回数ぶんの未来まで予測する")]
+        [SerializeField, Range(5, 120)] private int predictionSteps = 60;
+
         [Tooltip("飛行をやめた時に上向きの勢いを何割残すか。1のままだと数百m打ち上がる")]
         [SerializeField, Range(0f, 1f)] private float upwardMomentumFactor = 0.3f;
 
@@ -235,6 +242,15 @@ namespace FeelFreeFlying.Flight
             if (state.ToggleMotion)
             {
                 if (Mode == MotionMode.Flying) StopFlying(); else Launch();
+            }
+
+            // 飛行中でも急降下できる。**真下の屋上へ降りる操作を、飛行と歩行で分けない**
+            if (state.DropStraight && Mode == MotionMode.Flying)
+            {
+                StopFlying();
+                walkVelocity = Vector3.zero;
+                verticalVelocity = -dropSpeed;
+                ShowNotice("急降下");
             }
 
             if (Mode == MotionMode.Flying)
@@ -581,6 +597,39 @@ namespace FeelFreeFlying.Flight
 
             // 海へ落ちても死なせない。沈む前に飛行へ戻す（→ CLAUDE.md 不変条件3）
             if (transform.position.y < seaLevel + altitudeAboveSeaMin) Launch();
+        }
+
+        /// <summary>
+        /// 落下の着地点を予測する。歩行中で空中にいる時だけ意味を持つ。
+        ///
+        /// **落ちる先が見えないと、屋上を狙って降りることが運になる。**
+        /// 弾道を一定間隔で刻み、区間ごとに線を飛ばして最初に当たった所を返す。
+        /// 空気抵抗も入力も見込まないので、**入力し続ければずれる**——それでよく、
+        /// 手を離した時にどこへ落ちるかが分かれば足りる。
+        /// </summary>
+        public bool TryPredictLanding(out Vector3 point)
+        {
+            point = default;
+            if (Mode != MotionMode.Walking || body == null || body.isGrounded) return false;
+
+            Vector3 position = transform.position;
+            Vector3 velocity = walkVelocity + Vector3.up * verticalVelocity;
+
+            for (int i = 0; i < predictionSteps; i++)
+            {
+                velocity.y -= gravity * predictionStep;
+                Vector3 next = position + velocity * predictionStep;
+
+                if (Physics.Linecast(position, next, out RaycastHit hit))
+                {
+                    point = hit.point;
+                    return true;
+                }
+
+                position = next;
+            }
+
+            return false;
         }
 
         /// <summary>
