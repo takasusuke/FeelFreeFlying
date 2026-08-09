@@ -164,11 +164,15 @@ namespace FeelFreeFlying.Flight
 
             // PS5の配置に合わせる。×で加速、○で減速、R1でブースト、L1で水平、L2でジャンプ。
             // ×と○を加減速に使うぶん、元々そこにあったブーストと水平はショルダーへ寄せた
-            if (pad.buttonSouth.isPressed) { state.ThrottleUp = true; state.Boost = true; UsingGamepad = true; }
+            if (pad.buttonSouth.isPressed) { state.ThrottleUp = true; UsingGamepad = true; }
             if (pad.buttonEast.isPressed) { state.ThrottleDown = true; UsingGamepad = true; }
-            if (pad.rightShoulder.isPressed) { state.Boost = true; UsingGamepad = true; }
-            if (pad.leftShoulder.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
+            if (pad.leftShoulder.isPressed || pad.rightShoulder.isPressed)
+            {
+                state.Boost = true; // L1: ダッシュ / ブースト（R1でも同じ）
+                UsingGamepad = true;
+            }
             if (pad.leftTrigger.ReadValue() > 0.4f) { state.Jump = true; UsingGamepad = true; }
+            if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
             if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
             if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
             if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }
