@@ -177,13 +177,13 @@ namespace FeelFreeFlying.Flight
             if (target.IsWalking)
             {
                 hints = pad
-                    ? $"左スティック: 歩く / {confirm}: ダッシュ / {cancel}: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / {square}: 飛び立つ / {triangle}: 視点"
-                    : "W A S D: 歩く / Shift: ダッシュ / Space: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / F: 飛び立つ / C: 視点 / Esc: カーソル";
+                    ? $"左スティック: 歩く / 右スティック: 見回す / L2: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / {confirm}: ダッシュ / {square}: 飛び立つ / {triangle}: 視点"
+                    : "W A S D: 歩く / マウス: 見回す / Space: ジャンプ（空中でもう一度／壁で押し続けると駆け上がる） / Shift: ダッシュ / F: 飛び立つ / C: 視点 / Esc: カーソル";
             }
             else
             {
                 hints = pad
-                    ? $"左スティック: 傾ける / トリガー: 加減速 / {confirm}: ブースト / {cancel}: 水平 / {square}: 着地 / {triangle}: 視点 / 十字上: 上下反転 / {select}: やり直す"
+                    ? $"左スティック: 上下左右 / 右スティック: 見回す / {confirm}: 加速 / {cancel}: 減速 / R1: ブースト / L1: 水平 / {square}: 着地 / {triangle}: 視点 / {select}: やり直す"
                     : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / F: 着地 / C: 視点 / I: 上下反転 / K: 当たり判定 / R: やり直す / Esc: カーソルを返す";
             }
 

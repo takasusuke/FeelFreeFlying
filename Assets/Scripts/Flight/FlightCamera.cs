@@ -70,6 +70,18 @@ namespace FeelFreeFlying.Flight
         [Tooltip("腕が映るように近くまで描く。三人称の1mのままだと腕が切れる")]
         [SerializeField, Min(0.01f)] private float firstPersonNearClip = 0.12f;
 
+        [Header("フリールック（右スティック）")]
+        [Tooltip("左右に振れる角度")]
+        [SerializeField, Range(0f, 180f)] private float freeLookYawRange = 135f;
+
+        [Tooltip("上下に振れる角度")]
+        [SerializeField, Range(0f, 89f)] private float freeLookPitchRange = 60f;
+
+        [SerializeField, Min(1f)] private float freeLookRate = 150f;
+
+        [Tooltip("スティックを離してから正面へ戻る速さ (度/秒)。0で戻らない")]
+        [SerializeField, Min(0f)] private float freeLookReturnRate = 120f;
+
         [Header("画角")]
         [SerializeField, Range(30f, 120f)] private float fieldOfViewMin = 62f;
         [SerializeField, Range(30f, 130f)] private float fieldOfViewMax = 82f;
@@ -79,6 +91,9 @@ namespace FeelFreeFlying.Flight
         private Camera cameraComponent;
         private Vector3 followVelocity;
         private Renderer[] bodyRenderers;
+
+        /// <summary>首振りの角度（x=ヨー, y=ピッチ）。</summary>
+        private Vector2 freeLook;
 
         /// <summary>いまの視点。HUDの表示に使う。</summary>
         public ViewMode Mode => mode;
@@ -124,6 +139,7 @@ namespace FeelFreeFlying.Flight
             }
 
             float dt = Time.deltaTime;
+            UpdateFreeLook(dt);
             if (mode == ViewMode.FirstPerson) UpdateFirstPerson(dt); else UpdateThirdPerson(dt);
             UpdateFieldOfView(dt);
         }
@@ -139,7 +155,8 @@ namespace FeelFreeFlying.Flight
             transform.position = Vector3.SmoothDamp(
                 transform.position, desired, ref followVelocity, followSmoothing);
 
-            Vector3 lookTarget = craft.position + craft.forward * lookAhead;
+            // 首振りぶんはbasisに入っているので、機体の前ではなく**見ている方向**を狙う
+            Vector3 lookTarget = craft.position + basis * Vector3.forward * lookAhead;
             var desiredRotation = Quaternion.LookRotation(lookTarget - transform.position, basis * Vector3.up);
             transform.rotation = Quaternion.Slerp(
                 transform.rotation, desiredRotation, 1f - Mathf.Exp(-dt / rotationSmoothing));
@@ -165,11 +182,34 @@ namespace FeelFreeFlying.Flight
         /// <summary>目の位置。飛行と歩行で姿勢が違うので分ける。</summary>
         private Vector3 EyeOffset => target.IsWalking ? walkFirstPersonOffset : firstPersonOffset;
 
-        /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。</summary>
+        /// <summary>
+        /// 右スティックで首を振る。**進路は変わらない。**
+        /// 飛んでいる方向と見たい方向が違うのが、街を見に来ている乗り物の普通の状態。
+        /// 離したら正面へ戻す（戻さないと、後ろを向いたまま飛び続けて自分が迷子になる）。
+        /// </summary>
+        private void UpdateFreeLook(float dt)
+        {
+            Vector2 input = target.LookInput;
+
+            if (input.sqrMagnitude > 0.0001f)
+            {
+                freeLook.x += input.x * freeLookRate * dt;
+                freeLook.y += input.y * freeLookRate * dt;
+                freeLook.x = Mathf.Clamp(freeLook.x, -freeLookYawRange, freeLookYawRange);
+                freeLook.y = Mathf.Clamp(freeLook.y, -freeLookPitchRange, freeLookPitchRange);
+            }
+            else if (freeLookReturnRate > 0f)
+            {
+                freeLook = Vector2.MoveTowards(freeLook, Vector2.zero, freeLookReturnRate * dt);
+            }
+        }
+
+        /// <summary>ヨーとピッチはそのまま、ロールだけ割合で薄めた姿勢。首振りぶんを最後に足す。</summary>
         private Quaternion Basis(float roll)
         {
             Vector3 euler = target.transform.eulerAngles;
-            return Quaternion.Euler(euler.x, euler.y, -target.RollDegrees * roll);
+            var attitude = Quaternion.Euler(euler.x, euler.y, -target.RollDegrees * roll);
+            return attitude * Quaternion.Euler(-freeLook.y, freeLook.x, 0f);
         }
 
         private void UpdateFieldOfView(float dt)

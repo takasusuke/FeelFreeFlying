@@ -145,6 +145,9 @@ namespace FeelFreeFlying.Flight
         public float PitchDegrees => pitchDegrees;
         public float RollDegrees => rollDegrees;
         public bool IsBoosting { get; private set; }
+
+        /// <summary>首を振る入力（右スティック）。カメラが読む。進路には影響しない。</summary>
+        public Vector2 LookInput { get; private set; }
         public MotionMode Mode { get; private set; } = MotionMode.Flying;
         public bool IsWalking => Mode == MotionMode.Walking;
         public bool InvertPitch => invertPitch;
@@ -214,10 +217,14 @@ namespace FeelFreeFlying.Flight
             float pitchInput = Mathf.Clamp(aim + state.Arrows.y, -1f, 1f);
             float rollInput = Mathf.Clamp(state.Aim.x + state.LeftStick.x + state.Keys.x, -1f, 1f);
 
+            // 右スティックは進路を変えずに首だけ振る（カメラが読む）。
+            // **飛ぶ方向と見る方向を分けたいのは、街を見に来ているから。**
+            LookInput = state.RightStick;
+
             pitchDegrees += pitchInput * pitchRate * dt;
             rollDegrees += rollInput * rollRate * dt;
 
-            if (state.LevelOrJump)
+            if (state.LevelFlight)
             {
                 // 明示的な水平戻しは、自動より速くないと「効いた感じ」がしない
                 pitchDegrees = Mathf.MoveTowards(pitchDegrees, 0f, pitchRate * 2f * dt);
@@ -260,8 +267,11 @@ namespace FeelFreeFlying.Flight
         {
             IsBoosting = state.Boost;
 
-            float throttleInput = Mathf.Clamp(state.Keys.y + state.Trigger, -1f, 1f);
-            speed += throttleInput * throttleAcceleration * dt;
+            float throttleInput = state.Trigger;
+            if (state.ThrottleUp) throttleInput += 1f;
+            if (state.ThrottleDown) throttleInput -= 1f;
+
+            speed += Mathf.Clamp(throttleInput, -1f, 1f) * throttleAcceleration * dt;
 
             // 降下で速度が乗り、上昇で削がれる。位置エネルギーの交換のつもりで、力学ではない
             speed += Mathf.Sin(-pitchDegrees * Mathf.Deg2Rad) * diveAcceleration * dt;
@@ -376,6 +386,7 @@ namespace FeelFreeFlying.Flight
             // 視線。マウス（または右スティック）で回し、身体は水平のまま
             float lookX = state.Aim.x + state.RightStick.x;
             float lookY = (state.Aim.y + state.RightStick.y) * (invertPitch ? 1f : -1f) + state.Arrows.y;
+            LookInput = Vector2.zero; // 歩行中はカメラを直接回すので、フリールックは使わない
 
             yawDegrees += lookX * lookRate * dt;
             pitchDegrees = Mathf.Clamp(pitchDegrees + lookY * lookRate * dt, -80f, 80f);
@@ -387,8 +398,8 @@ namespace FeelFreeFlying.Flight
             Vector3 horizontal = heading * new Vector3(move.x, 0f, move.y) *
                                  (state.Boost ? runSpeed : walkSpeed);
 
-            bool jumpPressed = state.LevelOrJump && !jumpHeldLastFrame;
-            jumpHeldLastFrame = state.LevelOrJump;
+            bool jumpPressed = state.Jump && !jumpHeldLastFrame;
+            jumpHeldLastFrame = state.Jump;
 
             if (body.isGrounded)
             {

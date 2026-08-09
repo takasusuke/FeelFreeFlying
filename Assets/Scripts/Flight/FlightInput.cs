@@ -27,14 +27,23 @@ namespace FeelFreeFlying.Flight
         /// <summary>矢印キー。y=↑↓（機首を明示的に上下させる）。</summary>
         public Vector2 Arrows;
 
-        /// <summary>R2 - L2。飛行のスロットル。</summary>
+        /// <summary>R2 - L2。飛行のアナログなスロットル。</summary>
         public float Trigger;
 
-        /// <summary>飛行ならブースト、歩行なら走る。</summary>
+        /// <summary>加速（×ボタン / W）。</summary>
+        public bool ThrottleUp;
+
+        /// <summary>減速（○ボタン / S）。</summary>
+        public bool ThrottleDown;
+
+        /// <summary>飛行ならブースト、歩行ならダッシュ。</summary>
         public bool Boost;
 
-        /// <summary>飛行なら水平に戻す、歩行ならジャンプ。</summary>
-        public bool LevelOrJump;
+        /// <summary>飛行時に水平へ戻す。</summary>
+        public bool LevelFlight;
+
+        /// <summary>歩行時のジャンプ。</summary>
+        public bool Jump;
 
         /// <summary>着地する / 飛び立つ。</summary>
         public bool ToggleMotion;
@@ -143,7 +152,9 @@ namespace FeelFreeFlying.Flight
 
             state.LeftStick = ApplyDeadZone(pad.leftStick.ReadValue());
             state.RightStick = ApplyDeadZone(pad.rightStick.ReadValue());
-            state.Trigger = pad.rightTrigger.ReadValue() - pad.leftTrigger.ReadValue();
+
+            // L2はジャンプに使うので、アナログのスロットルはR2だけにする
+            state.Trigger = pad.rightTrigger.ReadValue();
 
             if (state.LeftStick.sqrMagnitude > 0f || state.RightStick.sqrMagnitude > 0f ||
                 Mathf.Abs(state.Trigger) > 0.01f)
@@ -151,8 +162,13 @@ namespace FeelFreeFlying.Flight
                 UsingGamepad = true;
             }
 
-            if (pad.buttonSouth.isPressed) { state.Boost = true; UsingGamepad = true; }
-            if (pad.buttonEast.isPressed) { state.LevelOrJump = true; UsingGamepad = true; }
+            // PS5の配置に合わせる。×で加速、○で減速、R1でブースト、L1で水平、L2でジャンプ。
+            // ×と○を加減速に使うぶん、元々そこにあったブーストと水平はショルダーへ寄せた
+            if (pad.buttonSouth.isPressed) { state.ThrottleUp = true; state.Boost = true; UsingGamepad = true; }
+            if (pad.buttonEast.isPressed) { state.ThrottleDown = true; UsingGamepad = true; }
+            if (pad.rightShoulder.isPressed) { state.Boost = true; UsingGamepad = true; }
+            if (pad.leftShoulder.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
+            if (pad.leftTrigger.ReadValue() > 0.4f) { state.Jump = true; UsingGamepad = true; }
             if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
             if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
             if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }
@@ -200,8 +216,16 @@ namespace FeelFreeFlying.Flight
 
             if (keys.sqrMagnitude > 0f || arrows.sqrMagnitude > 0f) UsingGamepad = false;
 
+            if (keys.y > 0f) state.ThrottleUp = true;
+            if (keys.y < 0f) state.ThrottleDown = true;
+
             if (keyboard.leftShiftKey.isPressed) { state.Boost = true; UsingGamepad = false; }
-            if (keyboard.spaceKey.isPressed) { state.LevelOrJump = true; UsingGamepad = false; }
+            if (keyboard.spaceKey.isPressed)
+            {
+                state.LevelFlight = true;
+                state.Jump = true;
+                UsingGamepad = false;
+            }
             if (keyboard.fKey.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = false; }
             if (keyboard.cKey.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = false; }
             if (keyboard.iKey.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = false; }
