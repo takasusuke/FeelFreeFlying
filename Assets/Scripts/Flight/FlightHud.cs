@@ -26,11 +26,17 @@ namespace FeelFreeFlying.Flight
         private GUIStyle hintStyle;
         private GUIStyle compassStyle;
         private GUIStyle compassMinorStyle;
+        private GUIStyle travelStyle;
+        private Transform viewTransform;
 
         private void Awake()
         {
             if (target == null) target = FindFirstObjectByType<FlightController>();
             if (input == null) input = FindFirstObjectByType<FlightInput>();
+
+            // 方位帯は「見ている方向」を指すので、機体ではなくカメラの向きを読む
+            var view = FindFirstObjectByType<FlightCamera>();
+            if (view != null) viewTransform = view.transform;
         }
 
         private void OnGUI()
@@ -74,6 +80,12 @@ namespace FeelFreeFlying.Flight
                 alignment = TextAnchor.MiddleCenter,
                 normal = { textColor = new Color(1f, 1f, 1f, 0.55f) },
             };
+            travelStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 15,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.6f, 0.9f, 1f, 0.95f) },
+            };
         }
 
         private void DrawSpeedAndAltitude()
@@ -109,10 +121,16 @@ namespace FeelFreeFlying.Flight
         ///
         /// PLATEAUの座標系はEUN（東・上・北）で取り込んでいるので、**Unityの+Zが北**になる。
         /// 数字だけでなく帯にするのは、旋回中に「どちらへ回っているか」が見えるようにするため。
+        ///
+        /// 帯が指すのは**見ている方向**。右スティックで視点だけ動かせる以上、
+        /// 見ている方向と進む方向は一致しない。**進む方向は別の印で出す**——
+        /// 一人称では自分の身体が見えないので、印が無いとどちらへ飛んでいるのか分からなくなる。
         /// </summary>
         private void DrawCompass()
         {
-            float heading = target.transform.eulerAngles.y;
+            float heading = viewTransform != null
+                ? viewTransform.eulerAngles.y
+                : target.transform.eulerAngles.y;
 
             var area = new Rect((Screen.width - CompassWidth) * 0.5f, 18f, CompassWidth, 46f);
             GUI.Box(area, GUIContent.none);
@@ -133,6 +151,25 @@ namespace FeelFreeFlying.Flight
 
             GUI.Label(new Rect(area.center.x - 40f, area.yMax - 2f, 80f, 24f),
                 $"{heading:F0}°", compassStyle);
+
+            DrawTravelMarker(area, heading);
+        }
+
+        /// <summary>進む方向の印。視点とずれている時だけ意味を持つ。</summary>
+        private void DrawTravelMarker(Rect area, float viewHeading)
+        {
+            float travel = target.transform.eulerAngles.y;
+            float delta = Mathf.DeltaAngle(viewHeading, travel);
+
+            // 帯からはみ出したら端に寄せて、どちら側かを矢印で示す
+            float clamped = Mathf.Clamp(delta, -CompassSpanDegrees * 0.5f, CompassSpanDegrees * 0.5f);
+            float x = area.center.x + clamped / CompassSpanDegrees * area.width;
+
+            string mark = Mathf.Abs(delta) > CompassSpanDegrees * 0.5f
+                ? (delta > 0f ? "▶ 進行方向" : "進行方向 ◀")
+                : "▲ 進行方向";
+
+            GUI.Label(new Rect(x - 60f, area.yMax + 2f, 120f, 24f), mark, travelStyle);
         }
 
         private static string DirectionLabel(int degrees)
