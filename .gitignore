@@ -65,3 +65,6 @@ desktop.ini
 /Assets/Scenes/M1Flight*.unity.meta
 # 検証ツールの出力（M0SceneStats等）。数値の正は docs/m0-plan.md §5 に転記する
 /docs/m0/
+# 計測シーンに紐づく生成物（オクルージョンカリングのデータ。40MB超）
+/Assets/Scenes/M0Benchmark/
+/Assets/Scenes/M0Benchmark.meta
