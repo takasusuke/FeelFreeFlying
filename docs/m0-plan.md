@@ -230,14 +230,60 @@ Failed to serialize PLATEAU.CityInfo.CityObjectList value.
 `AttributeDataHelper.GetSerializableCityObject()` の先頭で
 `if (!doSetAttrInfo) return null;` としており、オフならシリアライズ経路に入らない。
 
-原因はまだ特定できていない。`M0AttributeSerializationProbe`で確かめた範囲では、
-**空の`CityObjectList`は正常にシリアライズできる**（10バイト）。よってフォーマッタ登録の
-問題ではなく、実データ側の何かで落ちている。SDK同梱のMessagePackは3.1.4。
+#### 原因（2026-08-09 特定）: **SDK同梱の古いDLLが衝突している**
 
-**M3の見どころ自動抽出は属性が前提なので、これは必ず解決が要る。**
-M0の合否（60fps出るか）は属性なしで判断できるため、計測を止める理由にはしない。
-次の一手の候補: 実データを1棟ずつ流して落ちる地物を特定する / SDKのバージョンを変える /
-Synesthesias側へ報告する。
+`M0AttributeSerializationProbe`で属性の形を変えながら試したところ、**地物1つ・属性なしでも失敗**した。
+データの中身は無関係で、内部例外はこれ。
+
+```
+System.MissingMethodException: Method not found:
+  System.Runtime.CompilerServices.Unsafe.Add<T>(ref T, uintptr)
+```
+
+MessagePack 3.xが必要とする`Unsafe.Add(ref T, nuint)`が見つかっていない。
+SDKが`ThirdParty/LibTessDotNet-v1.1.15/`に**古い`System.Runtime.CompilerServices.Unsafe.dll`（23KB）**
+を同梱しており、これがプロジェクト全体で優先されるため。空のリストだけ通るのは、
+空配列を書く経路がこのメソッドを踏まないから。
+
+**つまりSDKとUnity 6000.3の組み合わせの問題で、こちらのデータや設定の誤りではない。**
+Synesthesias側へ報告する価値がある。
+
+DLLを消す・差し替えるという直し方は採らなかった。`Library/PackageCache`は再生成されるので
+修正が消え、tgzを作り直すかパッケージを埋め込むかになるが、**SDKを更新するたびに再発する**。
+
+#### 回避策（採用）: **CityGMLから直接読む**
+
+**属性はSDKのインポートを通さなくても取れる。** `PLATEAU.CityGML.CityGml.Load`は
+MessagePackを通らないので、そちらでGMLを読んで表にする（`M2AttributeExport`）。
+
+```
+Unity.exe -projectPath . -batchmode -quit -logFile <ログ> `
+  -executeMethod FeelFreeFlying.EditorTools.M2AttributeExport.Export
+```
+
+出力は`Data/Plateau/attributes/`（gitignore済み）。`buildings.csv`（gmlIDごとの属性）と
+`keys.csv`（キーの出現率）。**どのみちM3の抽出は属性を計算に使うので、
+4千個のGameObjectにコンポーネントとして載せるより、gmlIDを鍵にした表のほうが扱いやすい。**
+
+#### 結果（2026-08-09）: **属性は揃っている。ただし建築年は無い**
+
+新宿の4メッシュ = **建物8,794件・属性キー64種類**。M3で使えるものは以下。
+
+| キー | 充足率 | 例 |
+|---|---|---|
+| `bldg:usage` | **100%** | 共同住宅 / 官公庁施設 / 住宅 / 不明 |
+| `bldg:measuredHeight` | **100%** | 16.8（m） |
+| `bldg:storeysAboveGround` / `BelowGround` | **100%** | 7 / 0。**不明な建物は9999が入る** |
+| `bldg:class` | **100%** | 普通建物 / 普通無壁舎 / 不明 |
+| `uro:...:detailedUsage` | **100%** | より細かい用途 |
+| **`bldg:yearOfConstruction`** | **0%（存在しない）** | — |
+
+**建築年は使えない。** `requirements.md` §2.1は見どころの抽出に「用途・建築年・高さ・階数」を
+挙げているが、建築年はこのデータセットに入っていない。M3の抽出ルールは
+**用途・高さ・階数・detailedUsage**で組む。
+
+読み取りの注意点2つ。**キーの大小は揺れる**（`bldg:measuredHeight`が`measuredheight`で来る）ので
+大小を無視して引く。**同じ建物が親子の両方から拾える**のでgmlIDで重複を落とす（8,794件は重複除去後）。
 
 ---
 
