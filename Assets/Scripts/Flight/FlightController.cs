@@ -58,8 +58,8 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Range(0f, 0.5f)] private float attitudeSmoothing = 0.1f;
 
         [Tooltip("最高速での旋回の効き。1で速度に関係なく同じ、小さいほど高速では曲がらない。" +
-                 "**急旋回にブレーキが要るようにするための値**")]
-        [SerializeField, Range(0.1f, 1f)] private float highSpeedTurnFactor = 0.35f;
+                 "**0.35で試したところ街中が窮屈になったので1に戻した**（急旋回にブレーキを要求する設計は不採用）")]
+        [SerializeField, Range(0.1f, 1f)] private float highSpeedTurnFactor = 1f;
 
         [Header("浮遊感")]
         [Tooltip("機首を下げた時に乗る加速度 (m/s^2)。0で無効")]
@@ -88,18 +88,6 @@ namespace FeelFreeFlying.Flight
         [SerializeField, Range(0.1f, 1f)] private float grazeSpeedFactor = 0.6f;
 
         [Header("歩行")]
-        [Tooltip("着地地点を探せる高さの上限 (m)")]
-        [SerializeField, Min(1f)] private float landingRayLength = 400f;
-
-        [Tooltip("この距離まで近づいたら着地する (m)。**これより遠ければ降下に入る**")]
-        [SerializeField, Min(1f)] private float landingSnapDistance = 7f;
-
-        [Tooltip("降下中の最低速度 (m/s)。勢いよく降り立つための値")]
-        [SerializeField, Min(1f)] private float diveSpeed = 55f;
-
-        [Tooltip("降下中に狙いへ向き直る速さ (度/秒)")]
-        [SerializeField, Min(1f)] private float diveSteerRate = 160f;
-
         [Tooltip("L2を踏んだ時の減速 (m/s^2)。**急ブレーキ**。屋上に降りる時に要る")]
         [SerializeField, Min(1f)] private float brakeAcceleration = 70f;
 
@@ -159,8 +147,6 @@ namespace FeelFreeFlying.Flight
         private float climbLockRemaining;
         private Vector3 lastHitNormal;
         private Vector3 walkVelocity;
-        private bool diving;
-        private Vector3 divingTo;
 
         private Vector3 startPosition;
         private float startYaw;
@@ -240,14 +226,12 @@ namespace FeelFreeFlying.Flight
 
             if (state.ToggleMotion)
             {
-                if (diving) { diving = false; ShowNotice("降下をやめた"); }
-                else if (Mode == MotionMode.Flying) TryLand();
-                else Launch();
+                if (Mode == MotionMode.Flying) StopFlying(); else Launch();
             }
 
             if (Mode == MotionMode.Flying)
             {
-                if (diving) UpdateLandingDive(dt); else UpdateAttitude(state, dt);
+                UpdateAttitude(state, dt);
                 UpdateSpeed(state, dt);
                 MoveFlying(dt);
             }
@@ -422,10 +406,13 @@ namespace FeelFreeFlying.Flight
         // ------------------------------------------------------------------ 歩行
 
         /// <summary>
-        /// 真下の足場を探して降りる。屋上でも地面でもよい。
-        /// **飛行中は当たり判定が無いので、着地の瞬間にだけコライダーを起こす。**
+        /// 飛行をやめる。**その場で人に戻り、飛んでいた勢いをそのまま持って落ちる。**
+        ///
+        /// 以前は真下の足場へ瞬間移動していた。移動が無いので慣性の持ちようがなく、
+        /// 「飛行をやめたら進行方向へ大きく飛び出す」という当たり前の動きが出なかった。
+        /// 足場を探さないので、空中でも海の上でもやめられる（落ちるだけ）。
         /// </summary>
-        private void TryLand()
+        private void StopFlying()
         {
             if (body == null)
             {
@@ -433,71 +420,23 @@ namespace FeelFreeFlying.Flight
                 return;
             }
 
-            Vector3 origin = transform.position + Vector3.up * 2f;
-            if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, landingRayLength))
-            {
-                ShowNotice("真下に足場がありません");
-                return;
-            }
-
-            // **遠ければ瞬間移動せず、そこへ突っ込む。**
-            // 屋上へ勢いよく降り立つ動きは「降下してから着く」ことでしか出ない
-            if (hit.distance > landingSnapDistance)
-            {
-                divingTo = hit.point;
-                diving = true;
-                ShowNotice("降下");
-                return;
-            }
-
-            LandAt(hit.point);
-        }
-
-        /// <summary>降下中。狙った点へ機首を向け、近づいたら着地する。</summary>
-        private void UpdateLandingDive(float dt)
-        {
-            Vector3 toTarget = divingTo - transform.position;
-            float distance = toTarget.magnitude;
-
-            if (distance <= landingSnapDistance)
-            {
-                diving = false;
-                LandAt(divingTo);
-                return;
-            }
-
-            Vector3 direction = toTarget / distance;
-            float targetYaw = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
-            float targetPitch = Mathf.Clamp(Mathf.Asin(direction.y) * Mathf.Rad2Deg, -pitchLimit, pitchLimit);
-
-            yawDegrees = Mathf.MoveTowardsAngle(yawDegrees, targetYaw, diveSteerRate * dt);
-            pitchDegrees = Mathf.MoveTowards(pitchDegrees, targetPitch, diveSteerRate * dt);
-            speed = Mathf.Max(speed, diveSpeed);
-        }
-
-        private void LandAt(Vector3 point)
-        {
-            diving = false;
             Mode = MotionMode.Walking;
 
-            // **飛んできた勢いを歩行へ引き継ぐ。** 着地の瞬間に速度が0になると、
-            // 空中で急停止してから落ちるように見える
+            // **速度を削らない。** 水平ぶんは慣性、垂直ぶんはそのまま落下（上昇中なら跳ね上がる）
             Vector3 velocity = transform.forward * EffectiveSpeed;
             walkVelocity = new Vector3(velocity.x, 0f, velocity.z);
-            walkVelocity = Vector3.ClampMagnitude(walkVelocity, runSpeed);
-            verticalVelocity = Mathf.Min(velocity.y, 0f);
+            verticalVelocity = velocity.y;
 
             speed = walkVelocity.magnitude;
             rollDegrees = 0f;
             pitchDegrees = 0f;
             IsBoosting = false;
 
-            transform.position = point + Vector3.up * (body.height * 0.5f + body.skinWidth + 0.02f);
             transform.rotation = Quaternion.Euler(0f, yawDegrees, 0f);
 
             body.enabled = true;
             input?.ClearAim();
-            ShowNotice($"着地（高度 {point.y:F0} m）");
+            ShowNotice("飛行をやめた");
         }
 
         /// <summary>
