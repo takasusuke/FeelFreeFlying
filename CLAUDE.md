@@ -7,6 +7,8 @@
 ## 概要
 
 日本の街の上空を自由に飛び回って眺める体験ゲーム（Unity / PC・Steam想定）。
+**セッションを再開する時は[`docs/HANDOFF.md`](docs/HANDOFF.md)から読む**（現在地・動くもの・未確認事項）。
+
 要件定義は[`docs/requirements.md`](docs/requirements.md)が正。仕様の判断に迷ったらまずこれを読む。
 各マイルストーンの手順と測定結果は[`docs/m0-plan.md`](docs/m0-plan.md)（技術検証）・
 [`docs/m1-plan.md`](docs/m1-plan.md)（飛行の操作）・[`docs/m2-plan.md`](docs/m2-plan.md)（都市データの変換）・
