@@ -12,28 +12,32 @@ namespace FeelFreeFlying.Flight
         FollowView = 1,
     }
 
-    /// <summary>ジャンプの割り当て。右スティックを操作しながらでも押せるかが分かれ目。</summary>
-    public enum JumpBinding
-    {
-        LeftTrigger = 0,
-        Cross = 1,
-    }
-
     /// <summary>
-    /// 操作設定。**試遊で比べるための切り替えなので、コードではなく画面から変えられる**
+    /// 操作設定。**人によって好みが割れるところだけを画面から変えられるようにする**
     /// （`SettingsScreen`）。値は<see cref="PlayerPrefs"/>に残すので、次に起動しても同じ。
     ///
-    /// 操作方式が固まったら（`requirements.md` §11）、選択肢を減らして既定に畳む。
+    /// ボタンの割り当ては<see cref="FlightBindings"/>が持つ。
     /// </summary>
     public static class FlightSettings
     {
         private const string SteeringKey = "ff.steering";
-        private const string InvertKey = "ff.invertPitch";
-        private const string JumpKey = "ff.jump";
+
+        /// <summary>M1までの設定キー。**上下反転が1つしか無かった頃のもの**（→ 下記）。</summary>
+        private const string LegacyInvertKey = "ff.invertPitch";
+
+        private const string InvertFlightKey = "ff.invertFlightPitch";
+        private const string InvertLookKey = "ff.invertLookPitch";
 
         private static SteeringMode steering = (SteeringMode)PlayerPrefs.GetInt(SteeringKey, 0);
-        private static bool invertPitch = PlayerPrefs.GetInt(InvertKey, 1) != 0;
-        private static JumpBinding jump = (JumpBinding)PlayerPrefs.GetInt(JumpKey, 0);
+
+        // **反転は2つに分けた。** 機首の上下と視点の上下は、同じ人でも好みが逆になる
+        // （飛行機は倒すと下を向くが、カメラは上を向くのが自然、という感覚）。
+        // 古い設定は両方の初期値として引き継ぐ
+        private static bool invertFlightPitch =
+            PlayerPrefs.GetInt(InvertFlightKey, PlayerPrefs.GetInt(LegacyInvertKey, 1)) != 0;
+
+        private static bool invertLookPitch =
+            PlayerPrefs.GetInt(InvertLookKey, PlayerPrefs.GetInt(LegacyInvertKey, 1)) != 0;
 
         public static SteeringMode Steering
         {
@@ -41,16 +45,18 @@ namespace FeelFreeFlying.Flight
             set { steering = value; PlayerPrefs.SetInt(SteeringKey, (int)value); PlayerPrefs.Save(); }
         }
 
-        public static bool InvertPitch
+        /// <summary>飛行中の機首の上下を反転する。</summary>
+        public static bool InvertFlightPitch
         {
-            get => invertPitch;
-            set { invertPitch = value; PlayerPrefs.SetInt(InvertKey, value ? 1 : 0); PlayerPrefs.Save(); }
+            get => invertFlightPitch;
+            set { invertFlightPitch = value; PlayerPrefs.SetInt(InvertFlightKey, value ? 1 : 0); PlayerPrefs.Save(); }
         }
 
-        public static JumpBinding Jump
+        /// <summary>視点（カメラ）の上下を反転する。歩行中の見回しと三人称のカメラ。</summary>
+        public static bool InvertLookPitch
         {
-            get => jump;
-            set { jump = value; PlayerPrefs.SetInt(JumpKey, (int)value); PlayerPrefs.Save(); }
+            get => invertLookPitch;
+            set { invertLookPitch = value; PlayerPrefs.SetInt(InvertLookKey, value ? 1 : 0); PlayerPrefs.Save(); }
         }
 
         public static string SteeringLabel(SteeringMode mode) => mode switch
@@ -58,13 +64,6 @@ namespace FeelFreeFlying.Flight
             SteeringMode.IndependentView => "視点と進路を分ける（左スティックで進む）",
             SteeringMode.FollowView => "視線の方向へ飛ぶ（右スティックで進む）",
             _ => mode.ToString(),
-        };
-
-        public static string JumpLabel(JumpBinding binding) => binding switch
-        {
-            JumpBinding.LeftTrigger => "L2",
-            JumpBinding.Cross => "×",
-            _ => binding.ToString(),
         };
     }
 }

@@ -169,23 +169,35 @@ namespace FeelFreeFlying.Flight
                 UsingGamepad = true;
             }
 
-            // 加減速はR2/L2（トリガー）。**顔ボタンの加減速はやめた**——結局使われず、
-            // ジャンプが押しにくい位置へ追いやられていた
-            if (pad.leftShoulder.isPressed) { state.Boost = true; UsingGamepad = true; }   // L1: 飛行のブースト
-            if (pad.rightShoulder.isPressed) { state.Dash = true; UsingGamepad = true; }   // R1: 歩行のダッシュ
+            // **押して効く操作は割り当て表から引く**（→ FlightBindings）。
+            // 加減速だけはアナログのR2/L2で固定——押した量がそのまま速度になるので、
+            // ボタンに差し替えると別の操作になってしまう
+            foreach (FlightAction action in FlightBindings.All)
+            {
+                if (!FlightBindings.IsPadActive(pad, action)) continue;
 
-            bool jumpPressed = FlightSettings.Jump == JumpBinding.Cross
-                ? pad.buttonSouth.isPressed
-                : pad.leftTrigger.ReadValue() > 0.4f;
-            if (jumpPressed) { state.Jump = true; UsingGamepad = true; }
-            if (pad.buttonEast.wasPressedThisFrame) { state.DropStraight = true; UsingGamepad = true; }
-            if (pad.leftStickButton.isPressed) { state.LevelFlight = true; UsingGamepad = true; }
-            if (pad.rightStickButton.wasPressedThisFrame) { state.RecenterView = true; UsingGamepad = true; }
-            if (pad.buttonWest.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = true; }
-            if (pad.buttonNorth.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = true; }
-            if (pad.selectButton.wasPressedThisFrame) { state.Reset = true; UsingGamepad = true; }
-            if (pad.dpad.up.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = true; }
-            if (pad.dpad.down.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = true; }
+                Apply(ref state, action);
+                UsingGamepad = true;
+            }
+        }
+
+        /// <summary>割り当てられた操作を1フレーム分の入力へ反映する。</summary>
+        private static void Apply(ref FlightInputState state, FlightAction action)
+        {
+            switch (action)
+            {
+                case FlightAction.Boost: state.Boost = true; break;
+                case FlightAction.Dash: state.Dash = true; break;
+                case FlightAction.Jump: state.Jump = true; break;
+                case FlightAction.LevelFlight: state.LevelFlight = true; break;
+                case FlightAction.ToggleMotion: state.ToggleMotion = true; break;
+                case FlightAction.ToggleView: state.ToggleView = true; break;
+                case FlightAction.DropStraight: state.DropStraight = true; break;
+                case FlightAction.RecenterView: state.RecenterView = true; break;
+                case FlightAction.Reset: state.Reset = true; break;
+                case FlightAction.ToggleInvert: state.ToggleInvert = true; break;
+                case FlightAction.ToggleCollision: state.ToggleCollision = true; break;
+            }
         }
 
         private void ReadKeyboardAndMouse(ref FlightInputState state)
@@ -228,29 +240,17 @@ namespace FeelFreeFlying.Flight
 
             if (keys.sqrMagnitude > 0f || arrows.sqrMagnitude > 0f) UsingGamepad = false;
 
-            if (keyboard.leftShiftKey.isPressed)
+            // キーボード側も同じ割り当て表から引く。**既定では左Shiftがブーストとダッシュ、
+            // Spaceが水平戻しとジャンプを兼ねる**（飛行と歩行で同時に使われないため）
+            foreach (FlightAction action in FlightBindings.All)
             {
-                state.Boost = true;
-                state.Dash = true;
-                UsingGamepad = false;
-            }
-            if (keyboard.spaceKey.isPressed)
-            {
-                state.LevelFlight = true;
-                state.Jump = true;
-                UsingGamepad = false;
-            }
-            if (keyboard.fKey.wasPressedThisFrame) { state.ToggleMotion = true; UsingGamepad = false; }
-            if (keyboard.cKey.wasPressedThisFrame) { state.ToggleView = true; UsingGamepad = false; }
-            if (keyboard.iKey.wasPressedThisFrame) { state.ToggleInvert = true; UsingGamepad = false; }
-            if (keyboard.kKey.wasPressedThisFrame) { state.ToggleCollision = true; UsingGamepad = false; }
-            if (keyboard.leftCtrlKey.wasPressedThisFrame) { state.DropStraight = true; UsingGamepad = false; }
+                if (!FlightBindings.IsKeyActive(keyboard, action)) continue;
 
-            if (keyboard.rKey.wasPressedThisFrame)
-            {
-                state.Reset = true;
-                virtualStick = Vector2.zero;
+                Apply(ref state, action);
                 UsingGamepad = false;
+
+                // 姿勢リセットではマウスの蓄積も戻す
+                if (action == FlightAction.Reset) virtualStick = Vector2.zero;
             }
         }
 

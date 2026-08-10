@@ -197,7 +197,7 @@ namespace FeelFreeFlying.Flight
         }
         public MotionMode Mode { get; private set; } = MotionMode.Flying;
         public bool IsWalking => Mode == MotionMode.Walking;
-        public bool InvertPitch => FlightSettings.InvertPitch;
+        public bool InvertPitch => FlightSettings.InvertFlightPitch;
 
         /// <summary>着地に失敗した等、HUDに1行出したいときのメッセージ。</summary>
         public string Notice { get; private set; }
@@ -223,8 +223,9 @@ namespace FeelFreeFlying.Flight
             if (state.RecenterView) recenterViewRequested = true;
             if (state.ToggleInvert)
             {
-                FlightSettings.InvertPitch = !FlightSettings.InvertPitch;
-                ShowNotice(FlightSettings.InvertPitch ? "上下反転: あり" : "上下反転: なし");
+                // **飛行中に切り替えたいのは機首のほう。** 視点の反転は設定画面で決める
+                FlightSettings.InvertFlightPitch = !FlightSettings.InvertFlightPitch;
+                ShowNotice(FlightSettings.InvertFlightPitch ? "機首の上下反転: あり" : "機首の上下反転: なし");
             }
 
             if (state.ToggleCollision)
@@ -288,7 +289,7 @@ namespace FeelFreeFlying.Flight
             // 反転の対象はマウスとスティックだけ（矢印キーは常に↑で上向き）
             float turnInput = Mathf.Clamp(state.Aim.x + steer.x + (followView ? 0f : state.Keys.x), -1f, 1f);
             float climbInput = Mathf.Clamp(
-                (state.Aim.y + steer.y) * (FlightSettings.InvertPitch ? 1f : -1f) + state.Arrows.y, -1f, 1f);
+                (state.Aim.y + steer.y) * (FlightSettings.InvertFlightPitch ? 1f : -1f) + state.Arrows.y, -1f, 1f);
 
             // 飛び立った直後だけ、上向きの入力を無視する（走り出しの前傾がそのまま上昇に化けるため）
             if (climbLockRemaining > 0f)
@@ -497,7 +498,8 @@ namespace FeelFreeFlying.Flight
         {
             // 視線。マウス（または右スティック）で回し、身体は水平のまま
             float lookX = state.Aim.x + state.RightStick.x;
-            float lookY = (state.Aim.y + state.RightStick.y) * (FlightSettings.InvertPitch ? 1f : -1f) + state.Arrows.y;
+            // 歩行中の見回しは**視点の反転**に従う（機首の反転とは別に持つ）
+            float lookY = (state.Aim.y + state.RightStick.y) * (FlightSettings.InvertLookPitch ? 1f : -1f) + state.Arrows.y;
             LookInput = Vector2.zero; // 歩行中は視点がそのまま身体の向きなので、別に持たない
 
             yawDegrees += lookX * lookRate * dt;

@@ -231,28 +231,40 @@ namespace FeelFreeFlying.Flight
         private void DrawHints()
         {
             bool pad = input != null && input.UsingGamepad;
-            bool playStation = input != null && input.IsPlayStationPad;
+            bool playStation = input == null || input.IsPlayStationPad;
 
-            // PlayStationのパッドは表記を合わせる（A/B/X/Y のままだと押し間違える）
-            string confirm = playStation ? "×" : "A";
-            string cancel = playStation ? "○" : "B";
-            string square = playStation ? "□" : "X";
-            string triangle = playStation ? "△" : "Y";
-            string select = playStation ? "CREATE" : "SELECT";
+            // **ヒントは割り当て表から作る。** ボタンを変えられるようにした以上、
+            // ここを直書きしておくと、変えた瞬間にヒントが嘘になる（→ FlightBindings）
+            string Button(FlightAction action) => pad
+                ? FlightBindings.PadLabel(FlightBindings.Pad(action), playStation)
+                : FlightBindings.KeyLabel(FlightBindings.Keyboard(action));
 
             string hints;
             if (target.IsWalking)
             {
-                hints = pad
-                    ? $"左スティック: 歩く・空中で位置を寄せる / 右スティック: 見回す / L2: ジャンプ / R1: ダッシュ（**45度以上 上を向いて**走ると飛び立つ） / {cancel}: 急降下 / {square}: 飛び立つ / {triangle}: 視点"
-                    : "W A S D: 歩く / マウス: 見回す / Space: ジャンプ / Shift: ダッシュ（45度以上 上向きで飛び立つ） / 左Ctrl: 急降下 / F: 飛び立つ / C: 視点 / Esc: カーソル";
+                string move = pad ? "左スティック: 歩く・空中で位置を寄せる / 右スティック: 見回す" : "W A S D: 歩く / マウス: 見回す";
+
+                hints = $"{move} / {Button(FlightAction.Jump)}: ジャンプ / " +
+                        $"{Button(FlightAction.Dash)}: ダッシュ（**45度以上 上を向いて**走ると飛び立つ） / " +
+                        $"{Button(FlightAction.DropStraight)}: 急降下 / " +
+                        $"{Button(FlightAction.ToggleMotion)}: 飛び立つ / " +
+                        $"{Button(FlightAction.ToggleView)}: 視点";
             }
             else
             {
-                hints = pad
-                    ? $"左スティック: 進む方向（左右で旋回・上下で昇降） / 右スティック: 視点だけ動かす（R3で正面に戻す） / {confirm}・R2: 加速 / {cancel}・L2: 減速 / L1: ブースト / L3: 水平 / {square}: 着地 / {triangle}: 視点切替"
-                    : "マウス: 傾ける / W・S: 加減速 / A・D: ロール / Shift: ブースト / F: 着地 / C: 視点 / I: 上下反転 / K: 当たり判定 / R: やり直す / Esc: カーソルを返す";
+                // 加減速だけはアナログ固定（押した量が速度になるので差し替えられない）
+                string steer = pad
+                    ? "左スティック: 進む方向 / 右スティック: 視点だけ動かす / R2: 加速 / L2: 減速"
+                    : "マウス: 傾ける / W・S: 加減速 / A・D: ロール";
+
+                hints = $"{steer} / {Button(FlightAction.Boost)}: ブースト / " +
+                        $"{Button(FlightAction.LevelFlight)}: 水平 / " +
+                        $"{Button(FlightAction.ToggleMotion)}: 着地 / " +
+                        $"{Button(FlightAction.ToggleView)}: 視点 / " +
+                        $"{Button(FlightAction.Reset)}: やり直す";
             }
+
+            hints += pad ? " / OPTIONS: 設定" : " / Tab: 設定 / Esc: カーソル";
 
             if (input != null && !input.CursorCaptured)
             {
