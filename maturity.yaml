@@ -1,0 +1,18 @@
+# 成熟度の宣言。段階の定義・上げ方は ~/AIFiles/docs/maturity.md
+# 集計: python ~/AIFiles/scripts/maturity.py
+
+stage: building
+ceiling: public
+
+# 根拠（2026-08-11）:
+#   - M0（技術検証）・M1（飛行の操作）完了、M2（都市データの変換）ほぼ完了。
+#     M3（見どころの抽出）は実装済み・未検分（docs/HANDOFF.md §1）
+#   - 新宿3km四方・26,559棟が1コマンドで生成でき、再現性も確認済み
+#   - まだ誰にも配っていない
+#
+# ceiling が public な理由:
+#   FightingPieces と同じ。Steam / PC 想定だが価格方針が未定。
+#
+# 次に上げる条件:
+#   building -> internal : 自分以外の手にビルドを渡したとき
+#   internal -> public   : Steam でストアページが公開されたとき
