@@ -88,6 +88,10 @@ namespace FeelFreeFlying.EditorTools
             serialized.FindProperty("viewer").objectReferenceValue = controller.transform;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
+            // 見どころの光の柱（→ docs/m3-plan.md §4.1）。
+            // **計測ビルド（M2Bench）には載せない**——M0からの数字と並べられなくなる
+            M3SpotSetup.AddBeacons(controller.transform);
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, StreamingScene);
 

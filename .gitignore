@@ -83,6 +83,9 @@ desktop.ini
 # タイルの位置表（タイルと一緒に再生成される。古いまま残ると街が別の場所に出る）
 /Assets/Resources/tile-catalog.json
 /Assets/Resources/tile-catalog.json.meta
+# 見どころの一覧（都市データから計算で出る → docs/m3-plan.md §4。手で直すものではない）
+/Assets/Resources/spots-*.json
+/Assets/Resources/spots-*.json.meta
 # SDKの動的タイルを試した時の残骸（採用しない → docs/m2-plan.md §1）
 /Assets/Scenes/M3DynamicTile.unity
 /Assets/Scenes/M3DynamicTile.unity.meta
