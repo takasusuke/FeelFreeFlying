@@ -29,13 +29,19 @@ Macでも作業できるが、以下の2点により**計測は必ずWindowsで�
 
 ### Unityのバッチ実行
 
-同じマシンで`StoneKnights`・`FightingPieces`のUnityも動く。**プロセスを数える時は必ず
-プロジェクトパスで絞る** — `Get-Process Unity`は隣のリポジトリまで数えるため、そちらで
-数時間の測定が走っていると待ちが終わらず、「片付ける」と判断すると他の計算を消す。
+同じマシンで`StoneKnights`・`FightingPieces`のUnityも動く。**バッチ実行は
+`~/AIFiles/scripts/run-unity.ps1`から起動し、`Unity.exe`を直接叩かない。**
+共有ロック（同時に走るUnityはマシン全体で1つ）・プロジェクトパスで絞った完了待ち・
+生成物の鮮度確認をスクリプトが引き受ける。
 
-長時間の処理を1件ごとに書き出すこと、`-projectPath`を渡していても作業ディレクトリ側に
-ログが落ちることと併せて、[`~/AIFiles/docs/unity-batch-runs.md`](../docs/unity-batch-runs.md)を参照。
-M0での具体的な待ち方は[`docs/m0-plan.md`](docs/m0-plan.md) §2.1。
+`Get-Process Unity`は隣のリポジトリまで数えるため、そちらで数時間の測定が走っていると
+待ちが終わらず、「片付ける」と判断すると他の計算を消す。**数えたい時は
+`run-unity.ps1 -Status`**（プロジェクト単位で出る）。
+
+長時間の処理を1件ごとに書き出すこと、呼び出しの詳細は
+[`~/AIFiles/docs/unity-batch-runs.md`](../docs/unity-batch-runs.md)を参照。
+M0での具体的な待ち方は[`docs/m0-plan.md`](docs/m0-plan.md) §2.1（`run-unity.ps1`が
+同じことを引き受けるようになったため、手で書く必要はもう無い）。
 
 ## 技術スタック
 

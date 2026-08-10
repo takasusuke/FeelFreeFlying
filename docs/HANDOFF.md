@@ -41,31 +41,40 @@ Build\M2Flight\FeelFreeFlying-M2Flight.exe   # 試遊（3km四方・遠景あり
 **都市データはgit管理外**（`Assets/Scenes/Tiles/`・`TilesFar/`・`Data/Plateau/`）。
 別マシンや作り直しの時は下記で再生成する。
 
+**`~/AIFiles/scripts/run-unity.ps1`から起動する。`Unity.exe`を直接叩かない**
+（共有ロック・プロジェクトパスで絞った完了待ち・生成物の鮮度確認を引き受ける。
+→ [`~/AIFiles/docs/unity-batch-runs.md`](../../docs/unity-batch-runs.md)）。
+Unityのバージョンは`ProjectSettings/ProjectVersion.txt`から自動で引くので書かない。
+
 ```powershell
-$U = "C:\Program Files\Unity\Hub\Editor\6000.3.21f1\Editor\Unity.exe"
-$P = "C:\Users\takasu\WorkingSpace\AIFiles\FeelFreeFlying"
+$R = "$env:USERPROFILE\AIFiles\scripts\run-unity.ps1"
+$P = "$env:USERPROFILE\AIFiles\FeelFreeFlying"
 $G = "53394525,53394526,53394527,53394535,53394536,53394537,53394545,53394546,53394547"
 
 # 近景タイル（取り込み〜外壁〜当たり判定〜位置表〜カリング〜属性〜検証）9枚で約60分
-& $U -projectPath $P -batchmode -logFile tiles.log `
-  -executeMethod FeelFreeFlying.EditorTools.M2TilePipeline.BuildTiles -ffm2tiles-grid $G
+& $R -ProjectPath $P -UnityArgs @('-batchmode','-logFile','tiles.log',
+  '-executeMethod','FeelFreeFlying.EditorTools.M2TilePipeline.BuildTiles','-ffm2tiles-grid',$G)
 
 # ランドマークの実写テクスチャ（対象タイルだけ取り込み直す）約40分
-& $U -projectPath $P -batchmode -logFile landmark.log `
-  -executeMethod FeelFreeFlying.EditorTools.M2Landmarks.Apply -ffm2tiles-grid $G -fflandmarks 40
+& $R -ProjectPath $P -UnityArgs @('-batchmode','-logFile','landmark.log',
+  '-executeMethod','FeelFreeFlying.EditorTools.M2Landmarks.Apply','-ffm2tiles-grid',$G,'-fflandmarks','40')
 
 # 遠景タイル 9枚で約15分
-& $U -projectPath $P -batchmode -logFile far.log `
-  -executeMethod FeelFreeFlying.EditorTools.M2FarTiles.Build -ffm2tiles-grid $G
+& $R -ProjectPath $P -UnityArgs @('-batchmode','-logFile','far.log',
+  '-executeMethod','FeelFreeFlying.EditorTools.M2FarTiles.Build','-ffm2tiles-grid',$G)
 
 # 見どころの抽出（タイルを開いて測る → 5ルール）約5分
-& $U -projectPath $P -batchmode -quit -logFile spots.log `
-  -executeMethod FeelFreeFlying.EditorTools.M3SpotExtract.Build -ffm2tiles-grid $G
+& $R -ProjectPath $P -UnityArgs @('-batchmode','-quit','-logFile','spots.log',
+  '-executeMethod','FeelFreeFlying.EditorTools.M3SpotExtract.Build','-ffm2tiles-grid',$G)
 
 # 試遊ビルド
-& $U -projectPath $P -batchmode -quit -logFile build.log `
-  -executeMethod FeelFreeFlying.EditorTools.M2StreamingBuild.BuildWindows64
+& $R -ProjectPath $P -UnityArgs @('-batchmode','-quit','-logFile','build.log',
+  '-executeMethod','FeelFreeFlying.EditorTools.M2StreamingBuild.BuildWindows64')
 ```
+
+- `-projectPath`はスクリプトが付ける。`-UnityArgs`に入れない
+- ログの相対パスはプロジェクト直下に落ちる（スクリプトが作業ディレクトリを固定する）
+- 生成物を読む前に確かめたい時は`-ExpectOutput <ファイル>`を足す
 
 **`-quit`を付けるのはビルドだけ。** 取り込み系は非同期なので、付けると途中で終了する。
 完了は**プロジェクトパスで絞ったプロセス数**で見る（→ §5）。
@@ -149,13 +158,17 @@ Build\M2Bench\FeelFreeFlying-M2Bench.exe -ffbenchmark-quit -ffbenchmark-nohud -f
 
 **同じPCで`StoneKnights`・`FightingPieces`のUnityも動く。**
 
-- **プロセスをプロジェクトパスで絞る。** `Get-Process Unity`で数える／killすると
-  隣のリポジトリの数時間の測定を巻き込む
-- **こちらのUnityを起動すると、隣のUnityが落ちることがある。** 原因は特定できていない
-  （ライセンスログに証跡なし・別バージョン間でも発生）。8月10日には
-  `StoneKnights`の測定が5回連続で中断した。**起動前に他プロジェクトのUnityを確認し、
-  短い起動を繰り返さない**（ビルドと計測は1回の起動にまとめる）
-- 詳細は [`~/AIFiles/docs/unity-batch-runs.md`](../../docs/unity-batch-runs.md)
+- **`~/AIFiles/scripts/run-unity.ps1`から起動する。** 共有ロックを取るので、同時に走る
+  Unityはマシン全体で1つになる。完了待ちもプロジェクトパスで絞られる。
+  数えたい時は`run-unity.ps1 -Status`（`Get-Process Unity`は使わない）
+- **こちらのUnityを起動すると、隣のUnityが落ちることがある。** 原因は**特定できていない**。
+  8月10日には`StoneKnights`の測定が5回連続で中断した。説が2つあり（無差別killに
+  巻き込まれた説 / 起動そのものが落とす説）、どちらも証拠不足
+  （→ [`~/AIFiles/docs/unity-batch-runs.md`](../../docs/unity-batch-runs.md)）。
+  **ロックは両方に効くので運用は塞げているが、断定はしない。**
+  実行ごとの証拠（他プロジェクトのUnityの生死・Unityログの末尾）は
+  `~/AIFiles/.unity-runs.jsonl`に貯まる
+- **短い起動を繰り返さない**（ビルドと計測は1回の起動にまとめる）
 
 ---
 
