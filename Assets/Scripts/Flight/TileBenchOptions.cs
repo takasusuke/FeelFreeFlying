@@ -59,12 +59,53 @@ namespace FeelFreeFlying.Flight
                 Debug.Log("[BenchOptions] オクルージョンカリングを切った");
             }
 
+            // **遠景の何が重いのかを切り分ける。** 建物と地面を別々に消して測る
+            bool hideFarBuildings = System.Array.IndexOf(args, "-ffm2bench-farbuildings-off") >= 0;
+            bool hideFarGround = System.Array.IndexOf(args, "-ffm2bench-farground-off") >= 0;
+
+            if (hideFarBuildings || hideFarGround)
+            {
+                yield return new WaitForSeconds(applyAfterSeconds);
+                Debug.Log($"[BenchOptions] 遠景を隠した: {HideFar(hideFarBuildings, hideFarGround)} 個");
+            }
+
             if (!removeColliders && !plainMaterial) yield break;
 
             yield return new WaitForSeconds(applyAfterSeconds);
 
             if (removeColliders) Debug.Log($"[BenchOptions] 当たり判定を外した: {RemoveColliders()} 件");
             if (plainMaterial) Debug.Log($"[BenchOptions] 無地に差し替えた: {ApplyPlainMaterial()} 個");
+        }
+
+        /// <summary>
+        /// 遠景タイル（`Far_`で始まるシーン）の描画を止める。
+        /// **建物と地面のどちらが重いのか**を、同じビルドで確かめるため。
+        /// </summary>
+        private static int HideFar(bool buildings, bool ground)
+        {
+            int hidden = 0;
+
+            for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+            {
+                UnityEngine.SceneManagement.Scene scene =
+                    UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+
+                if (!scene.name.StartsWith("Far_", System.StringComparison.Ordinal)) continue;
+
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    foreach (MeshRenderer renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+                    {
+                        bool isBuilding = renderer.name.StartsWith("bldg_", System.StringComparison.Ordinal);
+                        if (isBuilding ? !buildings : !ground) continue;
+
+                        renderer.enabled = false;
+                        hidden++;
+                    }
+                }
+            }
+
+            return hidden;
         }
 
         private static int RemoveColliders()

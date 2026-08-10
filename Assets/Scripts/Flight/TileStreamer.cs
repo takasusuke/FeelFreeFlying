@@ -231,6 +231,8 @@ namespace FeelFreeFlying.Flight
                     farStates.Add(entry.farSceneName);
                     AsyncOperation load = SceneManager.LoadSceneAsync(entry.farSceneName, LoadSceneMode.Additive);
                     while (load != null && !load.isDone) yield return null;
+
+                    Debug.Log($"[TileStreamer] 遠景を読込 {entry.farSceneName}（{farStates.Count}枚）");
                 }
                 else if (!wanted && farLoaded)
                 {
@@ -238,6 +240,8 @@ namespace FeelFreeFlying.Flight
                     AsyncOperation unload = SceneManager.UnloadSceneAsync(entry.farSceneName);
                     while (unload != null && !unload.isDone) yield return null;
                     releasePending = true;
+
+                    Debug.Log($"[TileStreamer] 遠景を破棄 {entry.farSceneName}（{farStates.Count}枚）");
                 }
             }
         }

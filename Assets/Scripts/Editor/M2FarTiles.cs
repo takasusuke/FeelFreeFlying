@@ -4,7 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 namespace FeelFreeFlying.EditorTools
 {
@@ -47,6 +50,7 @@ namespace FeelFreeFlying.EditorTools
                     counts[gridCode] = await M0CityImport.ImportFarTile(gridCode, scenePath, codes);
                 }
 
+                DisableShadows();
                 RegisterInBuildSettings(codes.Select(FarScenePath));
 
                 foreach (KeyValuePair<string, int> pair in counts)
@@ -70,6 +74,42 @@ namespace FeelFreeFlying.EditorTools
             {
                 Debug.LogError($"[M2Far] 失敗: {exception}");
                 if (exitWhenDone) EditorApplication.Exit(1);
+            }
+        }
+
+        /// <summary>
+        /// 遠景タイルに**影を落とさせない**。
+        ///
+        /// 取り込んだままだと近景と同じ設定で影を投げる。遠景は
+        /// **1タイルが1メッシュ**なので、シャドウマップに描かれる時も
+        /// タイル丸ごとが対象になり、視界の外の部分まで毎フレーム描かれる。
+        /// 遠くの建物の影は地面の模様として見えないので、切っても失うものが無い。
+        /// </summary>
+        [MenuItem("Tools/FeelFreeFlying/M2: 遠景タイルの影を切る")]
+        public static void DisableShadowsFromMenu() => DisableShadows();
+
+        private static void DisableShadows()
+        {
+            if (!Directory.Exists(FarDir)) return;
+
+            foreach (string path in Directory.GetFiles(FarDir, "Far_*.unity"))
+            {
+                string scenePath = path.Replace('\\', '/');
+                Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+
+                int count = 0;
+                foreach (MeshRenderer renderer in UnityEngine.Object.FindObjectsByType<MeshRenderer>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    renderer.shadowCastingMode = ShadowCastingMode.Off;
+                    renderer.receiveShadows = false;
+                    count++;
+                }
+
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene, scenePath);
+
+                Debug.Log($"[M2Far] {Path.GetFileNameWithoutExtension(scenePath)}: 影を切った {count} 個");
             }
         }
 
