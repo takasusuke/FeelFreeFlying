@@ -152,6 +152,12 @@ Build\M2Bench\FeelFreeFlying-M2Bench.exe -ffbenchmark-quit -ffbenchmark-nohud -f
 海の上に5km間隔、世界は原点±20kmに収める（→ `requirements.md` §12.1）。
 実装は**都市ごとに取り込みの基準点をずらすだけ**で足りる見込み。
 
+**公開前必須・未実装: PLATEAUの出典表示UI**（2026-08-19確認、`docs/data-sources.md`新設）。
+設計上の不変条件5「PLATEAUの出典表示を外さない」が要求しているが、TextMeshPro等のUI実装
+自体がまだ無いため画面も存在しない。M5（見た目の作り込み）を待たず、**公開判断より前の
+どこかで必ず実装すること**（CC BY 4.0は表示が利用許諾の条件そのもので、任意の後回しには
+できない）。
+
 ---
 
 ## 5. このマシン固有の注意
